@@ -1,0 +1,242 @@
+---
+title: "HLA associated alleles"
+output: html_notebook
+---
+
+
+###Setup
+```{r,setup}
+setwd("C:/Users/tijs/Documents/RademakersLab/R")
+
+knitr::opts_knit$set(root.dir = "C:/Users/tijs/Documents/RademakersLab/R")
+
+library(tidyverse)
+library(data.table)
+library(ggplot2)
+library(ggrepel)
+library(DEGreport)
+library(RColorBrewer)
+library(DESeq2)
+library(pheatmap)
+library(stringr)
+library(data.table)
+library(stringi)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(gtools)
+library('biomaRt')
+library("EnhancedVolcano")
+library(tibble)
+
+```
+
+
+
+
+###Preparing the data
+```{r}
+
+test<-residf1_output
+
+#(file = paste("run_",format(Sys.time(),"%Y%m%d-%Hu%M"),"_lm.log",sep=""), append = TRUE, split=TRUE,type = "output")
+sampleinfo<-data.frame(read.csv("RNAseqSample_info.txt",header=T,sep="\t"))
+sampleinfo<-subset(sampleinfo,Age!="NA") #this removes one sample without AAD
+
+samplealiases<-read.csv("sample_aliases.txt",header=F,sep="\t")
+#Rename the columns in samplealisaes file
+names(samplealiases)<-c("seqid","sampleid")
+#Change the sample IDs
+samplealiases$sampleid<-sapply(stri_split_fixed(samplealiases$sampleid, '-', n=2),'[',2)
+#replace - with . in the seqi column from the samplealiases
+samplealiases$seqid<-gsub("-", ".", samplealiases$seqid)
+
+#rename the groups according to the correct column
+ sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-A']<-"TDP"
+ sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-B']<-"TDP"
+ sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-C']<-"TDP"
+ sampleinfo$groups[sampleinfo$GROUP=='Control']<-"Control"
+
+#Selecton only the TDP and Controls
+subsampleinfo<-sampleinfo[ grep("TDP|Control",sampleinfo$groups), ]
+
+#Subset the sampleinfo file
+subsampleinfo<-subsampleinfo[,c("SequencingID","Age","Sex", "groups","RINFCX","plate","GROUP")] 
+
+#Risk alleles that were identified:
+#HLA-DRA:01:01, -DRA:01:02, -DQB1:05:01 and DRB1:01:01
+#ENSG00000204287 (DRA), ENSG00000179344 (DQB1), ENSG00000196126 (DRB1)
+
+
+#grab only HLA DRA from the expression output
+DRA<-test[,"ENSG00000204287", drop=FALSE]
+DRA<-setDT(DRA, keep.rownames = TRUE)[]
+colnames(DRA)[1] <- "SeqID"
+DRA<-merge(DRA, subsampleinfo, by.x="SeqID", by.y="SequencingID")
+
+#grab only HLA DQB1 from the expression output
+DQB1<-test[,"ENSG00000179344", drop=FALSE]
+DQB1<-setDT(DQB1, keep.rownames = TRUE)[]
+colnames(DQB1)[1] <- "SeqID"
+DQB1<-merge(DQB1, subsampleinfo, by.x="SeqID", by.y="SequencingID")
+
+#grab only HLA DRB1 from the expression output
+DRB1<-test[,"ENSG00000196126", drop=FALSE]
+DRB1<-setDT(DRB1, keep.rownames = TRUE)[]
+colnames(DRB1)[1] <- "SeqID"
+DRB1<-merge(DRB1, subsampleinfo, by.x="SeqID", by.y="SequencingID")
+
+
+Alleles<-data.frame(read.csv("HISAT_Summary.data.csv",header=T,sep=";"))
+
+Alleles$FILE <- gsub(".*/", "", Alleles$FILE)
+Alleles$FILE <- sub("hisatgenotype_result_", "RR.", Alleles$FILE)
+Alleles$FILE <- sub(".report", "", Alleles$FILE)
+Alleles$FILE <- gsub(".{4}$", "", Alleles$FILE)
+Alleles$FILE <- sub("P1", "Plate1.", Alleles$FILE)
+Alleles$FILE <- sub("P2", "Plate2.", Alleles$FILE)
+
+#Create files containing all alleles for each associated HLA gene
+dral<-Alleles[,c("FILE","DRA.01.01","DRA.01.02")]
+
+dqb1l<-Alleles[,grepl("DQB1|FILE",names(Alleles))]
+
+drb1l<-Alleles[,grepl("DRB1|FILE",names(Alleles))]
+
+rm(Alleles)
+
+
+
+dral<-merge(dral, samplealiases, by.x="FILE", by.y="seqid")
+dral<-merge(dral, DRA, by.x="sampleid", by.y="SeqID")
+dral<-dral[,c(1:5,8)]
+
+dqb1l<-merge(dqb1l, samplealiases, by.x="FILE", by.y="seqid")
+dqb1l<-merge(dqb1l, DQB1, by.x="sampleid", by.y="SeqID")
+
+
+drb1l<-merge(drb1l, samplealiases, by.x="FILE", by.y="seqid")
+drb1l<-merge(drb1l, DRB1, by.x="sampleid", by.y="SeqID")
+
+
+```
+
+
+
+
+###Plot the risk alleles
+```{r}
+
+#DQB1:05:01
+
+dqb1plot<- dqb1l
+dqb1plot[dqb1plot==0]<-NA
+dqb1plot<-dqb1plot[,c("FILE","DQB1.05.01","ENSG00000179344","groups")]
+dqb1plot<-na.omit(dqb1plot)
+
+dqb1plot<-dqb1plot %>% mutate (Genotype=case_when(DQB1.05.01<30 ~"Below threshold",
+                                              DQB1.05.01>=30 & DQB1.05.01<70~"Heterozygous",
+                                              DQB1.05.01>=70~"Homozygous DQB1.05.01"))
+
+#Jittered
+ggplot(dqb1plot, aes(groups, ENSG00000179344)) + 
+  ylab("Residuals")+
+  theme_light() +
+  geom_point(aes(colour=Genotype), size =2,position = position_jitter(0.2)) +
+  geom_boxplot(alpha = 0, width = 0.2)
+
+#Unjittered
+ggplot(dqb1plot, aes(groups, ENSG00000179344)) + 
+  ylab("Residuals")+
+  theme_light() +
+  geom_point(aes(colour=Genotype), size=2) +
+  geom_boxplot(alpha = 0, width = 0.2)
+
+
+
+#DRB1:01:01
+
+drb1plot<- drb1l
+drb1plot[drb1plot==0]<-NA
+drb1plot<-drb1plot[,c("FILE","DRB1.01.01","ENSG00000196126","groups")]
+drb1plot<-na.omit(drb1plot)
+
+drb1plot<-drb1plot %>% mutate (Genotype=case_when(DRB1.01.01<30 ~"Below threshold",
+                                              DRB1.01.01>=30 & DRB1.01.01<70~"Heterozygous",
+                                              DRB1.01.01>=70~"Homozygous DRB1.01.01"))
+
+#Jittered
+ggplot(drb1plot, aes(groups, ENSG00000196126)) + 
+  ylab("Residuals")+
+  theme_light() +
+  geom_point(aes(colour=Genotype), size =2,position = position_jitter(0.2)) +
+  geom_boxplot(alpha = 0, width = 0.2)
+
+#Unjittered
+ggplot(drb1plot, aes(groups, ENSG00000196126)) + 
+  ylab("Residuals")+
+  theme_light() +
+  geom_point(aes(colour=Genotype), size=2) +
+  geom_boxplot(alpha = 0, width = 0.2)
+
+
+```
+
+
+
+
+
+
+#Plot the HLA-genes that were most significant in the expression analysis
+```{r}
+#grab only the HLA genes from the expression output
+SubsetA<-residf1_output[,c("ENSG00000206503","ENSG00000234745", "ENSG00000204525", "ENSG00000196735", "ENSG00000179344", "ENSG00000237541", "ENSG00000232629", "ENSG00000204287", "ENSG00000196126", "ENSG00000198502", "ENSG00000231389", "ENSG00000223865", "ENSG00000204592", "ENSG00000204642", "ENSG00000204632", "ENSG00000204257", "ENSG00000204252", "ENSG00000241106", "ENSG00000242574")]
+
+
+exp<-Expression_data
+
+exp2 <- exp[grepl(c("HLA-"), exp$symbol), ]
+
+ EnhancedVolcano(exp2,
+    lab = as.character(exp2$symbol),
+    x = 'Log2FC',
+    y = 'Pvalue_adj',
+    xlim = c(min(exp2[["Log2FC"]], na.rm = TRUE) - 2.0, max(exp2[["Log2FC"]], na.rm = TRUE) +
+2.0),
+    ylim = c(0, max(-log10(exp2[["Pvalue_adj"]]), na.rm = TRUE) + 1),
+    axisLabSize = 10.0,
+    title = 'Differential Gene expression analysis',
+    titleLabSize = 13.0,
+    subtitle = 'FTLD-TDP vs Controls',
+    subtitleLabSize = 10.0,
+    caption = bquote('Adjusted p-values were used'),
+    captionLabSize = 9.0,
+    pCutoff = 0.05,
+    FCcutoff = 0.58496250072, #this is the value for log2(1.5), because 1.5 is a cutoff used at linear FC
+    pointSize = 1.0,
+    labSize = 3.0,
+    labCol = "black",
+    drawConnectors = TRUE,
+    widthConnectors = 0.5,
+    col=c("grey20", "royalblue", "forestgreen", "red2" ),
+    colAlpha = 0.75,
+    legendLabels=c('No significance',expression(Log[2]~FC), expression(italic (p-value)),  expression(italic(p-value)~and~Log[2]~FC)),
+    legendPosition = 'right',
+    legendLabSize = 12,
+    legendIconSize = 3.0,
+    gridlines.major = TRUE,
+    gridlines.minor = TRUE,
+    border = "full",
+    borderWidth = 0.5)
+ 
+ 
+
+```
+
+
+
+
+
+
+
+
+

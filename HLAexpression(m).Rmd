@@ -1,0 +1,570 @@
+---
+title: "HLAexpression"
+author: "Cyril Pottier"
+date: "2/8/2021"
+output: html_document
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir = 'C:/Users/tijs/Documents/RademakersLab/R')
+
+```
+
+
+
+```{r}
+setwd("C:/Users/tijs/Documents/RademakersLab/R")
+
+
+#Loading libraries
+library(stringi)
+library(cqn)
+library(emmeans)
+library(data.table)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(gtools)
+library('biomaRt')
+library("EnhancedVolcano")
+library("anRichment")
+library(tibble)
+library(dplyr)
+
+#BiocManager::install("EnhancedVolcano")
+```
+
+# Prepare the dataset
+```{r}
+options( stringsAsFactors = FALSE)
+
+#(file = paste("run_",format(Sys.time(),"%Y%m%d-%Hu%M"),"_lm.log",sep=""), append = TRUE, split=TRUE,type = "output")
+counts<-data.frame(read.csv("RNAseqCounts.csv",header=T,sep=";"))
+sampleinfo<-data.frame(read.csv("RNAseqSample_info.txt",header=T,sep="\t"))
+sampleinfo<-subset(sampleinfo,Age!="NA") #this removes one sample without AAD
+
+samplealiases<-read.csv("sample_aliases.txt",header=F,sep="\t")
+#Rename the columns in samplealisaes file
+names(samplealiases)<-c("seqid","sampleid")
+
+#Change the sample IDs
+samplealiases$sampleid<-sapply(stri_split_fixed(samplealiases$sampleid, '-', n=2),'[',2)
+
+#replace - with . in the seqi column from the samplealiases
+samplealiases$seqid<-gsub("-", ".", samplealiases$seqid)
+
+#remove the _count characters in the counts df
+names(counts)<-gsub("_count", "", names(counts))
+
+#Create a vector of character with the sampleID
+seqnames<- names(counts)
+
+#Put the plate number in the plate column of the sampleinfo df
+sampleinfo$plate<-sapply(stri_split_fixed(sampleinfo$plate, '-', n=3),'[',2)
+
+counts<-data.frame(read.csv("RNAseqCounts.csv",header=T,sep=";"))
+names(counts) <- sub("X.home.MOLGEN.twatzeels.app.featureCounts.results.BAM_20210207.", "", names(counts))
+names(counts) <- sub(".bam", "", names(counts))
+
+
+#Replace the sample ID in the counts df with the actual STX ID using the samplealiases file
+for(i in 7:ncol(counts)){
+  for(j in 1:nrow(samplealiases)){
+      if(names(counts)[i]==samplealiases[j,1]){
+      names(counts)[i]=samplealiases[j,2];
+	}    
+    }
+}
+  
+
+# # rename the groups according to the correct column
+ sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-A']<-"TDP"
+ sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-B']<-"TDP"
+ sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-C']<-"TDP"
+ sampleinfo$groups[sampleinfo$GROUP=='Control']<-"Control"
+
+#Selecton only the TDP and Controls
+sampleinfo<-sampleinfo[ grep("TDP|Control",sampleinfo$groups), ]
+
+#Subset the sampleinfo file
+sampleinfo<-sampleinfo[,c("SequencingID","Age","Sex", "groups","RINFCX","plate","GROUP")] 
+
+#Create a list of samples actually used (with data)
+used_samples<-intersect(sampleinfo$SequencingID,names(counts))
+
+#Subset the counts df into the samples that we actually want to use
+countsraw<- counts[,used_samples] 
+nrow(countsraw)
+
+toadd<-read.table("merged_gene_count.csv",header=T,sep=";")
+
+toadd<- toadd[,1:7]
+library(data.table)
+test<-merge(counts, toadd, by.x="Geneid", by.y="GeneId")
+
+#Get the annotation of the transcripts from the counts file
+annotcountsraw<-test[,c(1:6, ncol(test))]
+
+#Add the geneId column into the rownames of the countsraw df
+rownames(countsraw)<-counts$Geneid
+######Now can get rid of the counts df and pursue with the countsraw###################################################
+
+
+#Clean up unecessary files
+#rm(counts, samplealiases, j, i, seqnames, used_samples)
+```
+
+## CQN normalization
+```{r}
+### cqn normalization 
+#geneinfo<-data.frame(read.csv("gene_info_gc_length_clean.tsv",header=T,sep="\t"))
+
+geneinfo<- read.table("Ensembl_hg38.Gene_features.GC_Content.txt",sep="\t", header=TRUE, stringsAsFactors=FALSE)
+
+# Remove Chr, Start and End column
+annotcountsraw <- annotcountsraw[,-c(2:5)]
+
+# Merge the annotation matrix to get the length and the GC conent for all genes
+geneinfocomplete<-merge(annotcountsraw, geneinfo, by.x="Geneid", by.y="GeneID")
+
+#Subest the geneinfocomplete df to the transcripts we have
+geneinfocomplete<-geneinfocomplete[match(rownames(countsraw), geneinfocomplete$Geneid),]
+
+#Clean up some df and lists
+#rm(annotcountsraw)
+```
+
+## Identify individuals with issues
+```{r}
+indv_problem<-c()
+ for(i in 1:ncol(countsraw)){
+ Male<-max(countsraw[which(row.names(countsraw)=="ENSG00000129824"),i],countsraw[which(row.names(countsraw)=="ENSG00000198692"),i],countsraw[which(row.names(countsraw)=="ENSG00000067048"),i],countsraw[which(row.names(countsraw)=="ENSG00000012817"),i])
+ Female<-countsraw[which(row.names(countsraw)=="ENSG00000229807"),i]
+ ratio=(Male+1)*100/(Male+Female+1)
+#  print(paste("Wrong gender assigned!!", names(annotcountsraw)[i], Male,Female,ratio, sep="\t"))
+    if(ratio>75.0 & sampleinfo[which(sampleinfo$SequencingID ==names(countsraw)[i]),3]=="F"){print(paste("Wrong gender assigned!! Indv is not a female", names(countsraw)[i], Male,Female,ratio, sep="\t"));
+    indv_problem<- c(indv_problem, names(countsraw)[i])
+    }
+    if(ratio<20.0 & sampleinfo[which(sampleinfo$SequencingID ==names(countsraw)[i]),3]=="M"){print(paste("Wrong gender assigned!!Indv is not a male", names(countsraw)[i], Male,Female,ratio, sep="\t"));
+    indv_problem<- c(indv_problem, names(countsraw)[i])
+ }
+    }
+
+indv_problem<-c(indv_problem,as.character(sampleinfo[which(is.na(sampleinfo$RINFCX)),c("SequencingID")]))
+indv_problem<-c(indv_problem,as.character(sampleinfo[which(is.na(sampleinfo$Age)),c("SequencingID")]))
+indv_problem
+```
+
+### Remove the individuals with sex discrepencies
+```{r}
+countsraw<-countsraw[ , -which(names(countsraw) %in% indv_problem)]
+sampleinfo<-sampleinfo[ ! sampleinfo$SequencingID %in% indv_problem, ]
+
+#Clean-up 
+#rm(geneinfo, Female, Male, i, indv_problem, ratio)
+```
+
+
+### Remove individuals with GC content of zero
+#```{r}
+#geneinfocomplete<-geneinfocomplete[!(geneinfocomplete$GC_Content==0),]
+#countsraw<-countsraw[match(geneinfocomplete$Geneid,rownames(countsraw)),]
+#```
+
+### Remove any NA observations in geneinfo dataset?
+```{r}
+#omit NA values
+geneinfocomplete<-na.omit(geneinfocomplete)
+
+#re-subset the dataframes
+countsraw<-subset(countsraw, rownames(countsraw) %in% geneinfocomplete$Geneid)
+```
+
+
+### Actual CQN
+```{r}
+set.seed(101)
+cqn<- cqn(countsraw, lengths = geneinfocomplete$Length, x = geneinfocomplete$GC_Content,  verbose = TRUE)
+#See the man page for ?cqn under the description of the output glm.offset (cqn corrects for size factors and the glm.offset contains size factor correction)
+#cnq.sizefactors<-cqn$glm.offset
+
+###We can examine plots of systematic effects by using cqnplot. The n argument refers to the systematic effect, n=1 is always the covariate specified by the x argument above, while n=2 is lengths.
+par(mfrow=c(1,2))
+cqnplot(cqn, n = 1, xlab = "GC content", lty = 1, ylim = c(1,7))
+cqnplot(cqn, n = 2, xlab = "length", lty = 1, ylim = c(1,7))
+
+#The normalized expression values are (These values are on the log2-scale)
+RPKM.cqn_all <- cqn$y + cqn$offset
+RPKM.cqn_all[1:4,1:4]
+
+
+#we need to use the component glm.offset which is on the natural logarithmic scale and also includes correcting for sizeFactors. It is possible to include the offset directly into the DGEList, by post-processing the output like:
+
+cqnGlm <- cqn$glm.offset #This is to be used as input for EdgeR or DEseq2. cqn$y + cqn$offset is a CQN-corrected estimated expression measures (not on the log scale)
+cqnGlm[1:4,1:4]
+
+save(RPKM.cqn_all, cqnGlm, file="Gene_Count_CQN.RData")
+write.table(RPKM.cqn_all,"RPKM_cqn.tsv",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = TRUE,col.names=NA)
+
+#filter out the normalized counts based on the maximum value in each row of my data, to be greater than 0
+RPKM.cqn_all<-data.frame(RPKM.cqn_all,check.names=FALSE)
+rownames(RPKM.cqn_all)<-rownames(countsraw)
+
+
+RPKM.cqn<-RPKM.cqn_all
+
+annot_RPKM.cqn<-cbind(geneinfocomplete,RPKM.cqn_all)
+
+RPKM.cqn<-annot_RPKM.cqn[apply(annot_RPKM.cqn[,9:ncol(annot_RPKM.cqn)], 1, function(x) (max(x) > 0)), ]
+nrow(RPKM.cqn)
+
+
+# Remove the non-protein coding genes and the X or Y chromosome genes
+RPKM.cqn_prot<-RPKM.cqn[which(RPKM.cqn$GeneBiotype=="protein_coding"),]
+nrow(RPKM.cqn_prot)
+RPKM.cqn_prot<-RPKM.cqn_prot[-grep("chrY",RPKM.cqn_prot$Chr),]
+nrow(RPKM.cqn_prot)
+RPKM.cqn_prot<-RPKM.cqn_prot[-grep("chrM",RPKM.cqn_prot$Chr),]
+nrow(RPKM.cqn_prot)
+RPKM.cqn_prot<-RPKM.cqn_prot[-grep("CHR_",RPKM.cqn_prot$Chr),]
+nrow(RPKM.cqn_prot)
+
+row.names(RPKM.cqn_prot)<-RPKM.cqn_prot$GeneId
+##ENO2 ENSG00000111674
+##CD68 ENSG00000129226
+##CD34 ENSG00000174059
+##GFAP ENSG00000131095
+##OLIG2 ENSG00000205927
+
+#Clean-up
+#rm(RPKM.cqn, RPKM.cqn_all,cqn,annot_RPKM.cqn, countsraw,cqnGlm, geneinfocomplete)
+```
+
+
+
+# Differential Expression code and generation of summary file
+```{r}
+groups <- factor(sampleinfo$groups, levels = c("Control","TDP"))
+sex<-factor(sampleinfo$Sex, levels = c("M","F"))
+plate<-factor(sampleinfo$plate, levels = c("Plate1", "Plate2"))
+
+
+
+# Function to calculate fold change for variable A (a1) and B (b1)
+
+foldChange <- function(a1, b1){
+  if(a1 > b1){
+    2^(a1 - b1)
+  }
+  else{
+    -(2^(b1 - a1))
+  }
+}
+
+
+###no model adjustment
+pValues <- c()
+rValues <- c()
+
+for(i in 1:nrow(RPKM.cqn_prot)){
+expr<-t(RPKM.cqn_prot[i,9:ncol(RPKM.cqn_prot)])
+f1<-lm(expr~sampleinfo$RINFCX+sampleinfo$Sex+sampleinfo$Age+sampleinfo$plate+groups, na.action=na.exclude)
+
+f1nogroup<-lm(expr~sampleinfo$RINFCX+sampleinfo$Sex+sampleinfo$Age+sampleinfo$plate, na.action=na.exclude)
+
+a1<-anova(f1)  
+## Extract p-values for variables
+  pValues$GeneId[i] <- RPKM.cqn_prot[i,"Geneid"]
+  pValues$symbol[i]<-RPKM.cqn_prot[i,"GeneName"]
+  pValues$PValueGroup[i] <- a1$"Pr(>F)"[5]
+  pValues$PValueRINFCX[i] <- a1$"Pr(>F)"[1]
+  pValues$PValueSex[i] <- a1$"Pr(>F)"[2]
+  pValues$PValueAge[i] <- a1$"Pr(>F)"[3]
+  pValues$PValuePlate[i] <- a1$"Pr(>F)"[4]
+  
+## Extract emmeans
+### Make reference grid first
+
+  ref1 <- ref_grid(f1) 
+  
+  ls1 <- summary(emmeans(ref1, "groups"))
+  pValues$EMMeanControl[i] <- ls1$emmean[1]
+  pValues$EMMeanTDP[i] <- ls1$emmean[2]
+  
+## Extract p-values for group variable and add fold change
+### A tukey method is used for comparing a family of estimates
+
+  ls2 <- summary(emmeans(ref1, pairwise ~ groups))
+  
+   pValues$PValueTDP_vs_Control[i] <- ls2$contrasts$p.value[1]
+  pValues$FoldChangeTDP_vs_Control[i] <- foldChange(ls1$emmean[2], ls1$emmean[1])
+  
+  
+  ## Extract residuals
+
+  r1 <- residuals(f1nogroup)
+  rValues$i <- r1
+  names(rValues)[i] <- RPKM.cqn_prot[i, "Geneid"]
+  
+#names(rValues)[i] <- row.names(RPKM.cqn[i,])
+
+#  residmat<-data.frame(resid(f1nogroup),groups)
+# names(residmat)<-c("expr_residuals","group")
+# # pdf("_wo_correction.pdf")
+# png("_wo_correction.png")
+#   p <- ggplot(residmat,aes(x=group, y=expr_residuals,fill=group)) + ggtitle("\n(without cell type markers)")+geom_boxplot()+ geom_jitter(shape=16, position=position_jitter(0.2))
+#  print(p)
+#  dev.off()
+#  
+}
+
+
+
+#Create the file with the pvalues and fold changes
+pValues$PValueTDP_vs_Control_fdr<-p.adjust(pValues$PValueTDP_vs_Control, method = "fdr", n = length(pValues$PValueTDP_vs_Control))
+
+pValues$PValueTDP_vs_Control_bon<-p.adjust(pValues$PValueTDP_vs_Control, method = "bonferroni", n = length(pValues$PValueTDP_vs_Control))
+
+f1_output<-data.frame(pValues)
+
+f1_output<-f1_output[,c("GeneId","symbol","PValueGroup", "PValueRINFCX", "PValueSex", "PValueAge","PValuePlate","EMMeanTDP","EMMeanControl","FoldChangeTDP_vs_Control","PValueTDP_vs_Control","PValueTDP_vs_Control_fdr","PValueTDP_vs_Control_bon")]
+
+write.table(f1_output,"FCX_Table_FC_pval.tsv",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = TRUE,col.names=NA)
+
+
+residf1_output<-data.frame(rValues)
+residf1_table<-transpose(residf1_output)
+row.names(residf1_table)<-names(residf1_output)
+names(residf1_table)<-row.names(residf1_output)
+
+residf1_table$symbol = mapIds(org.Hs.eg.db,keys=as.vector(row.names(residf1_table)), column="SYMBOL",keytype="ENSEMBL",multiVals="first")
+write.table(residf1_table,"FCX_Table_residuals.tsv",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = TRUE,col.names=NA)
+
+
+```
+
+```{r}
+#Clean-up
+#rm(list= ls()[!(ls() %in% c('f1_output','RPKM.cqn_prot', 'sampleinfo'))])
+```
+
+
+## FTLD-TDP vs controls
+### Prepare the data for plotting
+```{r}
+grouping<-"TDPvsControls"
+directory<-"./grouping"
+dir.create(directory)
+Expression_data_all<- f1_output
+#Expression_data_all <- na.omit(Expression_data_all)
+
+grep("^FoldChangeTDP_vs_Control$", colnames(Expression_data_all))
+
+colnames(Expression_data_all)
+
+Expression_data<-Expression_data_all[, c(1,2,10:13)]
+Expression_data$Log2FC<-foldchange2logratio(Expression_data$FoldChangeTDP_vs_Control, base=2)
+names(Expression_data)[names(Expression_data) == "PValueTDP_vs_Control_fdr"] <- "Pvalue_fdr"
+names(Expression_data)[names(Expression_data) == "PValueTDP_vs_Control_bon"] <- "Pvalue_bon"
+names(Expression_data)[names(Expression_data) == "PValueTDP_vs_Control"] <- "Pvalue"
+names(Expression_data)[names(Expression_data) == "GeneId"] <- "GeneSymbol"
+names(Expression_data)[names(Expression_data) == "FoldChangeTDP_vs_Control"] <- "FoldChange"
+mart <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
+genes <- Expression_data$GeneSymbol
+G_list <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","hgnc_symbol"),values=genes,mart= mart)
+Expression_data<-merge(Expression_data,G_list,by.x="GeneSymbol",by.y="ensembl_gene_id")
+
+#Clean-up
+#rm(G_list, mart,genes)
+```
+
+###Extract the names of the HLA genes present in the Expression dataset
+```{r}
+
+Gene_names <- Expression_data[, c("symbol"), drop=FALSE]
+HLA_list <- Gene_names[ c(grep("HLA-", Gene_names$symbol)), ]
+HLA_names <- data.frame(matrix(unlist(HLA_list), nrow=length(HLA_list), byrow=TRUE))
+head(HLA_names)
+
+
+```
+
+
+
+```{r}
+geom_label_repel(
+  max.overlaps = 200000
+)
+
+
+ EnhancedVolcano(Expression_data,
+    lab = as.character(Expression_data$symbol),
+    x = 'Log2FC',
+    y = 'Pvalue',
+    xlim = c(min(Expression_data[["Log2FC"]], na.rm = TRUE) - 0.5, max(Expression_data[["Log2FC"]], na.rm = TRUE) +
+0.5),
+    ylim = c(0, max(-log10(Expression_data[["Pvalue"]]), na.rm = TRUE) + 1),
+    axisLabSize = 10.0,
+    title = 'Differential Gene expression analysis',
+    titleLabSize = 13.0,
+    subtitle = 'FTLD-TDP vs Controls',
+    subtitleLabSize = 10.0,
+    caption = bquote('A Volcanoplot showing the differences in gene expression 
+                     when comparing FTLD-TDP patients to a control group.'),
+    captionLabSize = 9.0,
+    pCutoff = 10e-8,
+    FCcutoff = 1.5,
+    pointSize = 1.0,
+    selectLab = HLA_names$matrix.unlist.HLA_list...nrow...length.HLA_list...byrow...TRUE.,
+    labSize = 3.0,
+    labCol = "red2",
+    drawConnectors = TRUE,
+    widthConnectors = 0.5,
+    col=c("grey20", "royalblue", "forestgreen", "red2" ),
+    colAlpha = 0.65,
+    legendLabels=c('No significance',expression(Log[2]~FC), expression(italic (p-value)),  expression(italic(p-value)~and~Log[2]~FC)),
+    legendPosition = 'right',
+    legendLabSize = 12,
+    legendIconSize = 3.0,
+    gridlines.major = TRUE,
+    gridlines.minor = TRUE,
+    border = "full",
+    borderWidth = 0.5)
+```
+
+
+```{r}
+
+ EnhancedVolcano(Expression_data,
+    lab = as.character(Expression_data$symbol),
+    x = 'Log2FC',
+    y = 'Pvalue',
+    axisLabSize = 10.0,
+    title = 'Differential Gene expression analysis',
+    titleLabSize = 13.0,
+    subtitle = 'FTLD-TDP vs Controls',
+    subtitleLabSize = 10.0,
+    caption = bquote('A Volcanoplot showing the differences in gene expression 
+                     when comparing FTLD-TDP patients to a control group.'),
+    captionLabSize = 9.0,
+    pCutoff = 10e-8,
+    FCcutoff = 1.5,
+    pointSize = 1.0,
+    labSize = 3.0,
+    labCol = "red2",
+    col=c("grey20", "royalblue", "forestgreen", "red2" ),
+    colAlpha = 0.65,
+    legendLabels=c('No significance',expression(Log[2]~FC), expression(italic (p-value)),  expression(italic(p-value)~and~Log[2]~FC)),
+    legendPosition = 'right',
+    legendLabSize = 12,
+    legendIconSize = 3.0,
+    gridlines.major = TRUE,
+    gridlines.minor = TRUE,
+    border = "full",
+    borderWidth = 0.5)
+
+```
+
+
+```{r}
+ EnhancedVolcano(Expression_data,
+    lab = as.character(Expression_data$symbol),
+    x = 'Log2FC',
+    y = 'Pvalue_fdr',
+    xlim = c(min(Expression_data[["Log2FC"]], na.rm = TRUE) - 3.0, max(Expression_data[["Log2FC"]], na.rm = TRUE) +
+3.0),
+    ylim = c(0, max(-log10(Expression_data[["Pvalue_fdr"]]), na.rm = TRUE) + 1),
+    axisLabSize = 10.0,
+    title = 'Differential Gene expression analysis',
+    titleLabSize = 13.0,
+    subtitle = 'FTLD-TDP vs Controls',
+    subtitleLabSize = 10.0,
+    caption = bquote('Adjusted p-values (fdr) were used'),
+    captionLabSize = 9.0,
+    pCutoff = 0.05,
+    FCcutoff = 1.0,
+    pointSize = 0.1,
+    labSize = 2.0,
+    labCol = "black",
+    #drawConnectors = TRUE,
+    #widthConnectors = 0.5,
+    col=c("grey20", "royalblue", "forestgreen", "red2" ),
+    colAlpha = 0.75,
+    legendLabels=c('No significance',expression(Log[2]~FC), expression(italic (p-value)),  expression(italic(p-value)~and~Log[2]~FC)),
+    legendPosition = 'right',
+    legendLabSize = 12,
+    legendIconSize = 3.0,
+    gridlines.major = TRUE,
+    gridlines.minor = TRUE,
+    border = "full",
+    borderWidth = 0.5)
+```
+
+```{r}
+ EnhancedVolcano(Expression_data,
+    lab = as.character(Expression_data$symbol),
+    x = 'Log2FC',
+    y = 'Pvalue_bon',
+    xlim = c(min(Expression_data[["Log2FC"]], na.rm = TRUE) - 3.0, max(Expression_data[["Log2FC"]], na.rm = TRUE) +
+3.0),
+    ylim = c(0, max(-log10(Expression_data[["Pvalue_bon"]]), na.rm = TRUE) + 1),
+    axisLabSize = 10.0,
+    title = 'Differential Gene expression analysis',
+    titleLabSize = 13.0,
+    subtitle = 'FTLD-TDP vs Controls',
+    subtitleLabSize = 10.0,
+    caption = bquote('Adjusted p-values (bonferroni) were used'),
+    captionLabSize = 9.0,
+    pCutoff = 0.05,
+    FCcutoff = 0.58496250072,
+    pointSize = 0.1,
+    labSize = 2.0,
+    labCol = "black",
+    #drawConnectors = TRUE,
+    #widthConnectors = 0.5,
+    col=c("grey20", "royalblue", "forestgreen", "red2" ),
+    colAlpha = 0.75,
+    legendLabels=c('No significance',expression(Log[2]~FC), expression(italic (p-value)),  expression(italic(p-value)~and~Log[2]~FC)),
+    legendPosition = 'right',
+    legendLabSize = 12,
+    legendIconSize = 3.0,
+    gridlines.major = TRUE,
+    gridlines.minor = TRUE,
+    border = "full",
+    borderWidth = 0.5)
+```
+
+
+```{r}
+ EnhancedVolcano(Expression_data,
+    lab = as.character(Expression_data$symbol),
+    x = 'Log2FC',
+    y = 'Pvalue_fdr',
+    xlim = c(min(Expression_data[["Log2FC"]], na.rm = TRUE) - 0.5, max(Expression_data[["Log2FC"]], na.rm = TRUE) +
+0.5),
+    ylim = c(0, max(-log10(Expression_data[["Pvalue_fdr"]]), na.rm = TRUE) + 1),
+    axisLabSize = 10.0,
+    title = 'Differential Gene expression analysis',
+    titleLabSize = 13.0,
+    subtitle = 'FTLD-TDP vs Controls',
+    subtitleLabSize = 10.0,
+    caption = bquote('Adjusted p-values were used'),
+    captionLabSize = 9.0,
+    pCutoff = 0.05,
+    FCcutoff = 0.58496250072, #this is the value for log2(1.5), because 1.5 is a cutoff used at linear FC
+    pointSize = 0.4,
+    labSize = 2.0,
+    labCol = "red2",
+    #drawConnectors = TRUE,
+    #widthConnectors = 0.5,
+    colGradient = c('red3', 'royalblue'),
+    colAlpha = 0.75,
+    legendLabels=c('No significance',expression(Log[2]~FC), expression(italic (p-value)),  expression(italic(p-value)~and~Log[2]~FC)),
+    legendPosition = 'right',
+    legendLabSize = 12,
+    legendIconSize = 3.0,
+    gridlines.major = TRUE,
+    gridlines.minor = TRUE,
+    border = "full",
+    borderWidth = 0.5)
+```
+

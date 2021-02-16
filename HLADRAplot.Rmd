@@ -1,0 +1,158 @@
+---
+title: "Plot HLA-DRA allelic differences"
+output: html_notebook
+---
+
+
+```{r, setup}
+setwd("C:/Users/tijs/Documents/RademakersLab/R")
+
+knitr::opts_knit$set(root.dir = "C:/Users/tijs/Documents/RademakersLab/R")
+```
+
+###set work directory
+#setwd("C:/Users/tijs/Documents/RademakersLab")
+
+#knitr::opts_knit$set(root.dir = "C:/Users/tijs/Documents/RademakersLab/R")
+
+
+```{r}
+library(tidyverse)
+library(data.table)
+library(ggplot2)
+library(ggrepel)
+library(DEGreport)
+library(RColorBrewer)
+library(DESeq2)
+library(pheatmap)
+library(stringr)
+library(data.table)
+library(stringi)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(gtools)
+library('biomaRt')
+library("EnhancedVolcano")
+library(tibble)
+```
+
+###Preparation of the data
+```{r}
+
+test<-residf1_output
+
+#(file = paste("run_",format(Sys.time(),"%Y%m%d-%Hu%M"),"_lm.log",sep=""), append = TRUE, split=TRUE,type = "output")
+sampleinfo<-data.frame(read.csv("RNAseqSample_info.txt",header=T,sep="\t"))
+sampleinfo<-subset(sampleinfo,Age!="NA") #this removes one sample without AAD
+
+samplealiases<-read.csv("sample_aliases.txt",header=F,sep="\t")
+#Rename the columns in samplealisaes file
+names(samplealiases)<-c("seqid","sampleid")
+#Change the sample IDs
+samplealiases$sampleid<-sapply(stri_split_fixed(samplealiases$sampleid, '-', n=2),'[',2)
+#replace - with . in the seqi column from the samplealiases
+samplealiases$seqid<-gsub("-", ".", samplealiases$seqid)
+
+#rename the groups according to the correct column
+ sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-A']<-"TDP"
+ sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-B']<-"TDP"
+ sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-C']<-"TDP"
+ sampleinfo$groups[sampleinfo$GROUP=='Control']<-"Control"
+
+#Selecton only the TDP and Controls
+subsampleinfo<-sampleinfo[ grep("TDP|Control",sampleinfo$groups), ]
+
+#Subset the sampleinfo file
+subsampleinfo<-subsampleinfo[,c("SequencingID","Age","Sex", "groups","RINFCX","plate","GROUP")] 
+
+#grab only HLA DRA from the expression output
+DRA<-test[,"ENSG00000204287", drop=FALSE]
+DRA<-setDT(DRA, keep.rownames = TRUE)[]
+colnames(DRA)[1] <- "SeqID"
+DRA<-merge(DRA, subsampleinfo, by.x="SeqID", by.y="SequencingID")
+
+
+Alleles<-data.frame(read.csv("HISAT_Summary.data.csv",header=T,sep=";"))
+dral<-Alleles[,c("FILE","DRA.01.01","DRA.01.02")]
+rm(Alleles)
+
+dral$FILE <- gsub(".*/", "", dral$FILE)
+dral$FILE <- sub("hisatgenotype_result_", "RR.", dral$FILE)
+dral$FILE <- sub(".report", "", dral$FILE)
+dral$FILE <- gsub(".{4}$", "", dral$FILE)
+dral$FILE <- sub("P1", "Plate1.", dral$FILE)
+dral$FILE <- sub("P2", "Plate2.", dral$FILE)
+
+dral<-merge(dral, samplealiases, by.x="FILE", by.y="seqid")
+dral<-merge(dral, DRA, by.x="sampleid", by.y="SeqID")
+dral<-dral[,c(1:5,8)]
+
+```
+
+
+###HLA-DRA scatterplot
+```{r}
+#ENSG00000204287
+scplot<-dral
+scplot<-as_tibble(scplot)
+
+scplot$DRA.01.01<-as.numeric(gsub(",",".",scplot$DRA.01.01))
+scplot$DRA.01.02<-as.numeric(gsub(",",".",scplot$DRA.01.02))
+
+
+
+#write.table(scplot,"scplot",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = TRUE,col.names=NA)
+
+
+#insert new column based on genotype
+scplot<-scplot %>% mutate (Genotype=case_when(DRA.01.01<30 ~"Homozygous DRA:01:02",
+                                              DRA.01.01>=30 & DRA.01.01<70~"Heterozygous",
+                                              DRA.01.01>=70~"Homozygous DRA:01:01"))
+
+#Jittered
+ggplot(scplot, aes(groups, ENSG00000204287)) + 
+  ylab("Residuals")+
+  theme_light() +
+  geom_point(aes(colour=Genotype,),position = position_jitter(0.2)) +
+  geom_boxplot(alpha = 0, width = 0.2)
+
+#Unjittered
+ggplot(scplot, aes(groups, ENSG00000204287)) + 
+  ylab("Residuals")+
+  theme_light() +
+  geom_point(aes(colour=Genotype)) +
+  geom_boxplot(alpha = 0, width = 0.2)
+
+```
+
+
+###Linear regression HLA-DRA
+```{r}
+
+lmDRA<- lm( ~ Genotype, data=scplot)
+summary(lmDRA)
+
+scplot<-scplot %>% mutate (NumGenotype=case_when(DRA.01.01<30 ~"2",
+                                              DRA.01.01>=30 & DRA.01.01<70~"1",
+                                              DRA.01.01>=70~"0"))
+
+
+scplot<-scplot %>% mutate (NumGroup=case_when(groups=="TDP" ~"1",
+                                              groups=="Control"~"0"))
+
+
+#Make it so the y-axis has the amount of cases over total amount of samples, for each genotype !!!!UNFINISHED!!!!
+scatter.smooth(x=scplot$NumGenotype, y=scplot$NumGroup, main="Phenotype ~ Genotype")  # scatterplot
+
+
+```
+
+
+
+
+
+
+
+
+
+

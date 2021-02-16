@@ -1,0 +1,424 @@
+---
+title: "PlotHLAgenesSeparated"
+output: html_notebook
+---
+
+```{r, setup}
+setwd("C:/Users/tijs/Documents/Rademakers Lab")
+```
+
+###set work directory
+#setwd("C:/Users/tijs/Documents/Rademakers Lab")
+
+#knitr::opts_knit$set(root.dir = #'C:/Users/tijs/Documents/Rademakers Lab')
+
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(stringr)
+library(data.table)
+```
+
+
+###If you want to make a separate control and tdp dataset for plotting
+#we won't use it now but I spent a lot of time making it, so I cannot bring myself to throw it away yet
+```{r}
+#Make two separate dataframes, one for controls and one for patients. 
+#Transpose them and then change - by . to match platenames
+#sampleinfocontrol<-sampleinfo[sampleinfo$GROUP == "Control",]
+#sampleinfotdp<-sampleinfo[sampleinfo$groups == "TDP",]
+#sampleinfocontrol<-sampleinfocontrol[,c(1,4)]
+#sampleinfotdp<-sampleinfotdp[,c(1,4)]
+#sampleinfocontrol$SequencingID<-gsub("-",".",sampleinfocontrol$SequencingID)
+#sampleinfotdp$SequencingID<-gsub("-",".",sampleinfotdp$SequencingID)
+
+#Not sure if this is a necessary step, but I believe it is to later be able to use the "select" option (tidyverse)
+#test<- as_tibble(SubsetC)
+
+
+#☻This gives you the list for the select-option in the next step
+#cat(paste(shQuote(sampleinfocontrol, type="cmd"), collapse=", "))
+#cat(paste(shQuote(sampleinfotdp, type="cmd"), collapse=", "))
+
+
+#residcon<-test %>% select("hgnc_symbol", "NA99.013", "NA05.343", "NA98.318", "NA03.010", "NA02.098", "NA98.350", "NA03.248", "NA09.354", "NA04.127", "NA05.131", "X5138", "JA96.053", "NA04.006", "NA07.279", "NA98.268", "NA98.267", "NA02.048", "NA07.215", "NA98.274", "NA07.238", "NA09.421", "NA05.055", "NA98.356", "NA12.140")
+#Attention! somewhere platenames that exist out of only numbers (e.g. 5138) got changed
+#To e.g. X5138... I don't know what caused this
+
+#residtdp<-test %>% select("hgnc_symbol","NA13.069", "NA00.217", "NA11.427", "NA09.119", "NA11.033", "NA06.094", "NA09.204", "NA04.327", "NA98.230", "NA06.149", "NA05.122", "NA02.001", "NA10.324", "NA09.024", "NA11.013", "NA05.237", "X4706", "NA08.273", "NA06.199", "NA10.349", "NA02.194", "NA09.018", "X3970", "NA04.145", "NA10.336", "NA09.369", "NA11.305", "NA10.188", "NA12.150", "NA12.258", "NA02.045", "NA11.395", "NA12.350", "NA10.147", "NA00.138", "NA98.175", "NA11.015", "NA01.013", "NA05.367", "NA09.392", "NA11.212", "NA10.407", "NA09.312", "NA11.486", "NA05.065", "NA02.049", "NA05.324", "NA00.025", "NA04.111", "NA11.195", "NA10.421", "NA02.276", "NA08.051", "NA10.049", "NA98.195", "NA04.167", "NA00.186", "NA01.123", "NA98.204", "NA00.086", "NA11.201", "NA10.303", "NA02.270", "NA09.031", "NA02.144")
+#Here, 4706 and 3970 were also changed manually to X4706 and X3970 to match the platename in SubsetC
+
+
+#use the column containing gene names as rownames instead
+#residcon<-column_to_rownames(residcon, 'hgnc_symbol')
+#residtdp<-column_to_rownames(residtdp, 'hgnc_symbol')
+
+
+#Now you have a subset containing the residuals for the controls and the patients, respectively
+#Cleanup
+#rm (SubsetA, SubsetB, SubsetC, test, num)
+```
+
+
+###Preparation of the data
+```{r}
+
+test<-residf1_output
+
+#subdoodle<-test[, "ENSG00000206503"]
+#rm(subdoodle)
+
+#grab only the HLA genes from the expression output
+SubsetA<-test[,c("ENSG00000206503","ENSG00000234745", "ENSG00000204525", "ENSG00000196735", "ENSG00000179344", "ENSG00000237541", "ENSG00000232629", "ENSG00000204287", "ENSG00000196126", "ENSG00000198502", "ENSG00000231389", "ENSG00000223865", "ENSG00000204592", "ENSG00000204642", "ENSG00000204632", "ENSG00000204257", "ENSG00000204252", "ENSG00000241106", "ENSG00000242574")]
+
+#What about DPA2 and DPB2?
+#,"ENSG00000231461","ENSG00000224557"
+
+SubsetA<-data.frame(SubsetA, subsampleinfo)
+
+
+```
+
+
+###HLA-A
+```{r}
+#Make plot for HLA-A expression, Comparing patient and control samples
+#ENSG00000206503
+
+#Grab HLA-A from the subset
+scplot<-SubsetA[,c("ENSG00000206503","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000206503,)) + 
+  ylab("HLA-A")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+#different option for plotting, uses ggplot (better)
+
+
+```
+
+###HLA-B
+```{r}
+#ENSG00000234745
+scplot<-SubsetA[,c("ENSG00000234745","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000234745,)) + 
+  ylab("HLA-B")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-C
+```{r}
+#ENSG00000204525
+scplot<-SubsetA[,c("ENSG00000204525","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000204525,)) + 
+  ylab("HLA-C")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-DQA1
+```{r}
+#ENSG00000196735
+scplot<-SubsetA[,c("ENSG00000196735","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000196735,)) + 
+  ylab("HLA-DQA1")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-DQB1
+```{r}
+#ENSG00000179344
+scplot<-SubsetA[,c("ENSG00000179344","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000179344,)) + 
+  ylab("HLA-DQB1")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-DQA2
+```{r}
+#ENSG00000237541
+scplot<-SubsetA[,c("ENSG00000237541","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000237541,)) + 
+  ylab("HLA-DQA2")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+
+```
+
+###HLA-DQB2
+```{r}
+#ENSG00000232629
+scplot<-SubsetA[,c("ENSG00000232629","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000232629,)) + 
+  ylab("HLA-DQB2")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+
+```
+
+###HLA-DRA
+```{r}
+#ENSG00000204287
+scplot<-SubsetA[,c("ENSG00000204287","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000204287,)) + 
+  ylab("HLA-DRA")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-DRB1
+```{r}
+#ENSG00000196126
+scplot<-SubsetA[,c("ENSG00000196126","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000196126,)) + 
+  ylab("HLA-DRB1")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-DRB5
+```{r}
+#ENSG00000198502
+scplot<-SubsetA[,c("ENSG00000198502","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000198502,)) + 
+  ylab("HLA-DRB5")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-DPA1
+```{r}
+#ENSG00000231389
+scplot<-SubsetA[,c("ENSG00000231389","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000231389,)) + 
+  ylab("HLA-DPA1")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-DPB1
+```{r}
+#ENSG00000223865
+scplot<-SubsetA[,c("ENSG00000223865","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000223865,)) + 
+  ylab("HLA-DPB1")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+#What about DPA2 and DPB2?
+
+
+###HLA-E
+```{r}
+#ENSG00000204592
+scplot<-SubsetA[,c("ENSG00000204592","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000204592,)) + 
+  ylab("HLA-E")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-F
+```{r}
+#ENSG00000204642
+scplot<-SubsetA[,c("ENSG00000204642","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000204642,)) + 
+  ylab("HLA-F")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-G
+```{r}
+#ENSG00000204632
+scplot<-SubsetA[,c("ENSG00000204632","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000204632,)) + 
+  ylab("HLA-G")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-DMA
+```{r}
+#ENSG00000204257
+scplot<-SubsetA[,c("ENSG00000204257","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000204257,)) + 
+  ylab("HLA-DMA")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-DMB
+```{r}
+#ENSG00000242574
+scplot<-SubsetA[,c("ENSG00000242574","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000242574,)) + 
+  ylab("HLA-DMB")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-DOA
+```{r}
+#ENSG00000204252
+scplot<-SubsetA[,c("ENSG00000204252","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000204252,)) + 
+  ylab("HLA-DOA")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+###HLA-DOB
+```{r}
+#ENSG00000241106
+scplot<-SubsetA[,c("ENSG00000241106","SequencingID","groups")]
+
+#ggplot, with added boxplot and violin shape to visualize density distribution
+ggplot(scplot, aes(groups, ENSG00000241106,)) + 
+  ylab("HLA-DOB")+
+  theme_light()+
+  geom_point( aes(colour=groups)) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
+
+```
+
+
+
+
+
+
+
+
+
