@@ -196,6 +196,9 @@ exp<-Expression_data
 
 exp2 <- exp[grepl(c("HLA-"), exp$symbol), ]
 
+
+
+#Volcano plot
  EnhancedVolcano(exp2,
     lab = as.character(exp2$symbol),
     x = 'Log2FC',
@@ -227,9 +230,25 @@ exp2 <- exp[grepl(c("HLA-"), exp$symbol), ]
     gridlines.minor = TRUE,
     border = "full",
     borderWidth = 0.5)
- 
- 
 
+ 
+#Scatterplot
+
+expsig<-exp2
+expsig<-subset(expsig,expsig$Pvalue_adj<0.05)
+
+
+ggplot(expsig, aes(Log2FC, Pvalue_adj, colour = symbol) ) + 
+  theme_light() +
+  labs(colour="HLA-gene") + 
+  xlim (-1.2,1.2) +
+  ylim (0,0.06) +
+  geom_point(size =2, position = position_jitter(0.2)) +
+  #geom_boxplot(alpha = 0.2, width = 0.2) + 
+  geom_vline(xintercept=0.58496250072, linetype="dashed", color = "red") +
+  labs(title = "Fold change of Significant HLA genes")
+  
+ 
 ```
 
 
