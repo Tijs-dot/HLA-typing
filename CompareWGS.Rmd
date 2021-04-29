@@ -1,0 +1,433 @@
+---
+title: "WGS_comparison_Shulan"
+output: html_notebook
+---
+
+
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir = 'C:/Users/tijs/Documents/RademakersLab/R')
+
+```
+
+###load libraries
+```{r}
+setwd("C:/Users/tijs/Documents/RademakersLab/R")
+
+#Loading libraries
+library(tidyverse)
+library('biomaRt')
+library(RColorBrewer)
+library(stringi)
+library(data.table)
+library(reshape2)  #put df in wide format
+
+```
+
+###Load datasets
+```{r}
+setwd("C:/Users/tijs/Documents/RademakersLab/R/WGS")
+
+#Load all genotype data from Shulan
+con_opti<- data.frame(read.table("MAYO_BIOBANK_838_allele_OP_050322019.xls",header=T,sep="\t"))
+hla_opti<-data.frame(read.table("FTD_OP_hla_517_05032019.xls",header=T,sep="\t"))
+con_sga<-data.frame(read.table("MAYO_BIOBANK_805_allele_SGA_050322019.xls",header=T,sep="\t"))
+hla_sga<-data.frame(read.table("FTD_sga_hla_517_05032019.xls",header=T,sep="\t"))
+con_HD<-data.frame(read.table("MAYO_BIOBANK_838_allele_HD_050322019.xls",header=T,sep="\t"))
+hla_HD<-data.frame(read.table("FTD_HD_hla_517_05032019.xls",header=T,sep="\t"))
+
+#Load my genotyping data
+df_hisat<-data.frame(read.table("MAYO_summary.csv",header=T,sep=","))
+colnames(df_hisat)[1:2]<-c("SAMPLE","GENE")
+#Load sample info
+sampleinfo_wgs<-data.frame(read.table("WGSsampleinfo.txt",header=T,sep="\t"))
+
+#OptiType only types HLA-A, B and C
+
+```
+###Prepare data for comparison
+```{r}
+
+test1<-con_opti
+test2<-hla_opti
+test1$GROUP<-"Control"
+test2$GROUP<-"TDP"
+opti <- rbind(test1, test2)
+
+test1<-con_HD
+test2<-hla_HD
+test1$GROUP<-"Control"
+test2$GROUP<-"TDP"
+HD <- rbind(test1, test2)
+
+test1<-con_sga
+test2<-hla_sga
+test1$GROUP<-"Control"
+test2$GROUP<-"TDP"
+SGA <- rbind(test1, test2)
+
+hs_trimmed<-df_hisat
+hs_trimmed$ALLELE1<-sub('^([^:]+:[^:]+).*', '\\1', hs_trimmed$ALLELE1)  #Trim to two fields
+hs_trimmed$ALLELE2<-sub('^([^:]+:[^:]+).*', '\\1', hs_trimmed$ALLELE2)
+
+rm(test1, test2, con_opti, hla_opti,con_HD, hla_HD, con_sga, hla_sga )
+```
+
+###Compare findings HISAT and OptiType
+```{r}
+#Compare HISAT and OptiType
+
+test<-opti[,c(3,2,5:8)]
+#view(as.data.frame(table(test$SAMPLE)))
+#s_3595-ST-0002 only occurs 5 times, where it shoud occur 6 times in df -> omit it!!
+test<-test[!(test$SAMPLE=="s_3595-ST-0002"),]
+test <- test[with(test, order(SAMPLE, ALLELE)), ]
+
+#Put into wide format
+new_scores <- reshape(transform(test, i = 1:2),
+                      idvar = c("SAMPLE", "ALLELE"), timevar = "i", direction = "wide")
+new_scores<-new_scores[,c(1:3,7,4:6)]
+colnames(new_scores)<- c("SAMPLE", "GENE", "ALLELE1", "ALLELE2", "SOURCE", "COUNT", "GROUP")
+
+#Extract A, B and C from hisat data (only genes identified by OptiType)
+compare<- hs_trimmed[grep(c("\\bA\\b|\\bB\\b|\\bC\\b"), hs_trimmed$GENE) ,]
+#Combine all samples genotyped by both algorithms into one dataframe
+compare1<-merge(compare, new_scores, by.x = c("SAMPLE", "GENE"), by.y = c("SAMPLE", "GENE"))
+compare1<-compare1[, c(1:4,9,10,13)]
+
+#Combine alleles into their genotype. This seemed the easiest way to compare both results
+colnames(compare1)<- c("SAMPLE", "GENE", "ALLELE1", "ALLELE2", "ALLELE_P.1", "ALLELE_P.2", "GROUP")
+compare1 <- compare1 %>% unite(GT_HS, ALLELE1, ALLELE2, sep = "+", remove=F)
+compare1 <- compare1 %>% unite(GT_OT, ALLELE_P.1, ALLELE_P.2, sep = "+", remove=F)
+compare1 <- compare1 %>% unite(GT_OT_rev, ALLELE_P.2, ALLELE_P.1, sep = "+", remove=F)
+compare2<-compare1[, c(1,2,4,5,8,9,3,6,7)]
+
+compare2<- compare2 %>% mutate(Match=if_else( 
+                            GT_HS == GT_OT | GT_HS == GT_OT_rev, "TRUE", "FALSE") )
+compare2<- compare2 %>% mutate(PartMatch=if_else(
+                            ALLELE1 == ALLELE_P.1 & Match == "FALSE" | 
+                            ALLELE1 == ALLELE_P.2 & Match == "FALSE" | 
+                            ALLELE2 == ALLELE_P.1 & Match == "FALSE" |
+                            ALLELE2 == ALLELE_P.2 & Match == "FALSE", "PARTIAL", "FALSE"))
+
+compare2$PartMatch[compare2$Match == "TRUE"] <- "TRUE"
+
+
+table(unlist(compare2$PartMatch))
+#FALSE PARTIAL    TRUE 
+#    5     163    3285 
+
+#Separate genes
+compare3<-compare2[grep("\\bA\\b", compare2$GENE) ,]
+compare4<-compare2[grep("\\bB\\b", compare2$GENE) ,]
+compare5<-compare2[grep("\\bC\\b", compare2$GENE) ,]
+table(unlist(compare3$PartMatch))
+table(unlist(compare4$PartMatch))
+table(unlist(compare5$PartMatch))
+
+
+barplot(table(compare2$PartMatch, compare2$GENE), col = c("#B2182B", "#92C5DE", "#2166AC" ),
+        width = c(1, 1, 1),
+        main = "HISAT-genotype and OptiType", legend.text = c("Mismatch", "Partial", "Match"),
+        xlab = "Gene", ylab = "#Samples",
+        #args.legend = list(x = "topright", bty = "n", inset=c(-0.15, 0))
+        )
+
+
+rm(new_scores, compare, compare3, compare4, compare5, compare1)
+
+```
+
+###Compare HISAT and HLA-HD
+```{r}
+
+
+test<-HD[,c(3,2,5,7)]
+test <- reshape(transform(test, i = 1:2),
+                      idvar = c("SAMPLE", "ALLELE"), timevar = "i", direction = "wide")
+
+
+test<-test[,c(1:3,5,6)]
+paste0(head(test$ALLELE, 33), collapse=", ")
+
+#Combine all samples genotyped by both algorithms into one dataframe
+compare1<-merge(hs_trimmed , test, by.x = c("SAMPLE", "GENE"), by.y = c("SAMPLE", "ALLELE"))
+compare1<-compare1[, c(1:4,9, 10)]
+
+#Combine alleles into their genotype. This seemed the easiest way to compare both results
+compare1 <- compare1 %>% unite(GT_HS, ALLELE1, ALLELE2, sep = "+", remove=F)
+compare1 <- compare1 %>% unite(GT_HD, ALLELE_P.1, ALLELE_P.2, sep = "+", remove=F)
+compare1 <- compare1 %>% unite(GT_HD_rev, ALLELE_P.2, ALLELE_P.1, sep = "+", remove=F)
+compare1<-compare1[, c(1,2,4,5,8,9,3,6,7)]
+
+compare2<- compare1 %>% mutate(Match=if_else( 
+                            GT_HS == GT_HD | GT_HS == GT_HD_rev, "TRUE", "FALSE") )
+compare2<- compare2 %>% mutate(PartMatch=if_else(
+                            ALLELE1 == ALLELE_P.1 & Match == "FALSE" | 
+                            ALLELE1 == ALLELE_P.2 & Match == "FALSE" | 
+                            ALLELE2 == ALLELE_P.1 & Match == "FALSE" |
+                            ALLELE2 == ALLELE_P.2 & Match == "FALSE", "PARTIAL", "FALSE"))
+
+compare2$PartMatch[compare2$Match == "TRUE"] <- "TRUE"
+
+unique(compare2$ALLELE_P.1)
+
+barplot(table(compare2$PartMatch, compare2$GENE), col = c("#B2182B", "#92C5DE", "#2166AC" ),
+        width = c(1, 1, 1),
+        main = "HISAT-genotype and HLA-HD", legend.text = c("Mismatch", "Partial", "Match"), 
+        xlab = "
+        Gene", ylab = "#Samples", las=2
+        #args.legend = list(x = "topright", bty = "n", inset=c(-0.15, 0))
+        )
+
+
+count<- compare2 %>% 
+   group_by(GENE) %>% 
+   count(compare2$PartMatch)
+write.table(count2, "HLA-HD_HISAT_match", quote = FALSE, sep = "\t", na = "NA", dec = ".", row.names = TRUE, col.names=NA )
+
+rm(count, compare1, compare2, test )
+
+```
+
+###Compare SGA to HISAT-genotype
+```{r}
+test<-SGA[,c(3,2,5)]
+test <- reshape(transform(test, i = 1:2),
+                      idvar = c("SAMPLE", "ALLELE"), timevar = "i", direction = "wide")
+
+paste0(head(test$ALLELE, 33), collapse=", ")
+
+#Combine all samples genotyped by both algorithms into one dataframe
+compare1<-merge(hs_trimmed , test, by.x = c("SAMPLE", "GENE"), by.y = c("SAMPLE", "ALLELE"))
+compare1<-compare1[, c(1:4,9, 10)]
+colnames(compare1)<- c("SAMPLE", "GENE", "ALLELE1", "ALLELE2", "ALLELE_P.1", "ALLELE_P.2")
+
+#Combine alleles into their genotype. This seemed the easiest way to compare both results
+compare1 <- compare1 %>% unite(GT_HS, ALLELE1, ALLELE2, sep = "+", remove=F)
+compare1 <- compare1 %>% unite(GT_HD, ALLELE_P.1, ALLELE_P.2, sep = "+", remove=F)
+compare1 <- compare1 %>% unite(GT_HD_rev, ALLELE_P.2, ALLELE_P.1, sep = "+", remove=F)
+compare1<-compare1[, c(1,2,4,5,8,9,3,6,7)]
+
+compare2<- compare1 %>% mutate(Match=if_else( 
+                            GT_HS == GT_HD | GT_HS == GT_HD_rev, "TRUE", "FALSE") )
+compare2<- compare2 %>% mutate(PartMatch=if_else(
+                            ALLELE1 == ALLELE_P.1 & Match == "FALSE" | 
+                            ALLELE1 == ALLELE_P.2 & Match == "FALSE" | 
+                            ALLELE2 == ALLELE_P.1 & Match == "FALSE" |
+                            ALLELE2 == ALLELE_P.2 & Match == "FALSE", "PARTIAL", "FALSE"))
+
+compare2$PartMatch[compare2$Match == "TRUE"] <- "TRUE"
+
+unique(compare2$ALLELE_P.1)
+
+barplot(table(compare2$PartMatch, compare2$GENE), col = c("#B2182B", "#92C5DE", "#2166AC" ),
+        width = c(1, 1, 1),
+        main = "HISAT-genotype and SGA", legend.text = c("Mismatch", "Partial", "Match"), 
+        xlab = "
+        Gene", ylab = "#Samples", las=2,
+        args.legend = list(x = "topright", bty = "n", inset=c(-0.15, 0))
+        )
+
+
+count<- compare2 %>% 
+   group_by(GENE) %>% 
+   count(compare2$PartMatch)
+
+write.table(count, "HISAT_SGA_match", quote = FALSE, sep = "\t", na = "NA", dec = ".", row.names = TRUE, col.names=NA )
+
+```
+
+###Compare HLA-HD and SGA
+```{r}
+
+test<-SGA[,c(3,2,5)]
+test <- reshape(transform(test, i = 1:2),
+                      idvar = c("SAMPLE", "ALLELE"), timevar = "i", direction = "wide")
+colnames(test)<-c("SAMPLE_SGA", "GENE_SGA" , "ALLELE_1_SGA", "ALLELE_2_SGA")
+
+test1<-HD[,c(3,2,5)]
+test1<-reshape(transform(test1, i = 1:2),
+                      idvar = c("SAMPLE", "ALLELE"), timevar = "i", direction = "wide")
+colnames(test1)<-c("SAMPLE_HD", "GENE_HD" , "ALLELE_1_HD", "ALLELE_2_HD")
+
+#Combine all samples genotyped by both algorithms into one dataframe
+compare1<-merge(test1 , test, by.x = c("SAMPLE_HD", "GENE_HD"), by.y = c("SAMPLE_SGA", "GENE_SGA"))
+
+#Combine alleles into their genotype. This seemed the easiest way to compare both results
+compare1 <- compare1 %>% unite(GT_HD, ALLELE_1_HD, ALLELE_2_HD, sep = "+", remove=F)
+compare1 <- compare1 %>% unite(GT_SGA, ALLELE_1_SGA, ALLELE_2_SGA, sep = "+", remove=F)
+compare1 <- compare1 %>% unite(GT_SGA_rev, ALLELE_2_SGA, ALLELE_1_SGA, sep = "+", remove=F)
+compare1<-compare1[, c(1,2,4,5,8,9,3,6,7)]
+
+compare2<- compare1 %>% mutate(Match=if_else( 
+                            GT_HD == GT_SGA | GT_HD == GT_SGA_rev, "TRUE", "FALSE") )
+compare2<- compare2 %>% mutate(PartMatch=if_else(
+                            ALLELE_1_HD == ALLELE_1_SGA & Match == "FALSE" | 
+                            ALLELE_1_HD == ALLELE_2_SGA & Match == "FALSE" | 
+                            ALLELE_2_HD == ALLELE_1_SGA & Match == "FALSE" |
+                            ALLELE_2_HD == ALLELE_2_SGA & Match == "FALSE", "PARTIAL", "FALSE"))
+
+compare2$PartMatch[compare2$Match == "TRUE"] <- "TRUE"
+
+barplot(table(compare2$PartMatch, compare2$GENE), col = c("#D95F02", "#E6AB02", "#1B9E77" ),
+        width = c(1, 1, 1),
+        main = "HLA-HD and SGA", legend.text = c("Mismatch", "Partial", "Match"), 
+        xlab = "
+        Gene", ylab = "#Samples", las=2,
+        args.legend = list(x = "topright", bty = "n", inset=c(-0.15, 0))
+        )
+
+barplot(table(compare2$PartMatch, compare2$GENE), col = c("#B2182B", "#92C5DE", "#2166AC" ),
+        width = c(1, 1, 1),
+        main = "HLA-HD and SGA", legend.text = c("Mismatch", "Partial", "Match"), 
+        xlab = "
+        Gene", ylab = "#Samples", las=2,
+        args.legend = list(x = "topright", bty = "n", inset=c(-0.15, 0))
+        )
+
+
+
+count<- compare2 %>% 
+   group_by(GENE) %>% 
+   count(compare2$PartMatch)
+
+#write.table(count, "HLA-HD_SGA_match", quote = FALSE, sep = "\t", na = "NA", dec = ".", row.names = TRUE, col.names=NA )
+
+display.brewer.all(colorblindFriendly = TRUE)
+brewer.pal(n=9, "Dark2")
+display.brewer.pal(n=9, "Dark2")
+
+
+```
+
+
+
+
+#####################################
+
+###Fisher tests raw alleles count
+```{r}
+HISAT_DRA<-hs_trimmed[grepl(("DRA"), hs_trimmed$GENE), ]
+HISAT_DRA<-merge(HISAT_DRA, sampleinfo_wgs, by.x = "SAMPLE", by.y = "sampleid")
+HISAT_DRA<-HISAT_DRA[, c(1,3,4,28)]
+colnames(HISAT_DRA)<-c("SAMPLE_HS", "ALLELE_1_HS", "ALLELE_2_HS" , "GROUP_HS")
+
+HISAT_DRA<-reshape(HISAT_DRA, 
+        direction = "long",
+        varying = list(names(HISAT_DRA)[2:3]),
+        v.names = "ALLELE_HS",
+        idvar = c("SAMPLE_HS", "GROUP_HS"))
+
+HD_DRA<-HD[grepl(("DRA"), HD$ALLELE ), ]
+HD_DRA<-HD_DRA[, c(3,5,7)] 
+colnames(HD_DRA)<-c("SAMPLE_HD", "ALLELE_HD", "GROUP_HD")
+
+
+
+table(HISAT_DRA$GROUP_HS, HISAT_DRA$ALLELE_HS)
+table(HD_DRA$GROUP_HD, HD_DRA$ALLELE_HD)
+
+#For HISAT-genotype2
+HISAT_TAB <- table(HISAT_DRA$GROUP_HS, HISAT_DRA$ALLELE_HS)
+fisher.test(HISAT_TAB, conf.int = TRUE, conf.level = 0.95)
+chisq.test(HISAT_TAB)
+summary(HISAT_TAB)
+
+
+#For HLA-HD data
+HD_TAB <- table(HD_DRA$GROUP_HD, HD_DRA$ALLELE_HD)
+fisher.test(HD_TAB, conf.int = TRUE, conf.level = 0.95)
+chisq.test(HD_TAB)
+
+
+
+#For SGA data
+
+
+
+```
+
+###Fisher test genotypic model
+```{r}
+HISAT_DRA<-hs_trimmed[grepl(("DRA"), hs_trimmed$GENE), ]
+HISAT_DRA<-merge(HISAT_DRA, sampleinfo_wgs, by.x = "SAMPLE", by.y = "sampleid")
+HISAT_DRA<-HISAT_DRA[, c(1,3,4,28)]
+colnames(HISAT_DRA)<-c("SAMPLE_HS", "ALLELE_1_HS", "ALLELE_2_HS" , "GROUP_HS")
+
+#Define genotype as numerical value
+HISAT_DRA<- HISAT_DRA %>% mutate(Genotype_HS=case_when(
+                            ALLELE_1_HS == "DRA*01:01" & ALLELE_2_HS == "DRA*01:01" ~ "2", 
+                            ALLELE_1_HS == "DRA*01:01" & ALLELE_2_HS == "DRA*01:02" ~ "1",
+                            ALLELE_1_HS == "DRA*01:02" & ALLELE_2_HS == "DRA*01:01" ~ "1",
+                            ALLELE_1_HS == "DRA*01:02" & ALLELE_2_HS == "DRA*01:02" ~ "0"
+                            ))
+
+
+#Prepare HD data
+HD_DRA<-HD[grepl(("DRA"), HD$ALLELE ), ]
+HD_DRA<-reshape(transform(HD_DRA, i = 1:2),
+                      idvar = c("SAMPLE", "ALLELE"), timevar = "i", direction = "wide")
+HD_DRA<-HD_DRA[, c(2,5,10,12)] 
+colnames(HD_DRA)<-c("SAMPLE_HD", "ALLELE_1_HD", "ALLELE_2_HD" , "GROUP_HD")
+
+HD_DRA<- HD_DRA %>% mutate(Genotype_HD=case_when(
+                            ALLELE_1_HD == "DRA*01:01" & ALLELE_2_HD == "DRA*01:01" ~ "2", 
+                            ALLELE_1_HD == "DRA*01:01" & ALLELE_2_HD == "DRA*01:02" ~ "1",
+                            ALLELE_1_HD == "DRA*01:02" & ALLELE_2_HD == "DRA*01:01" ~ "1",
+                            ALLELE_1_HD == "DRA*01:02" & ALLELE_2_HD == "DRA*01:02" ~ "0"
+                            ))
+
+#Exclude samples from HD that are not present in HISAT
+merged <- merge(HISAT_DRA, HD_DRA, by.x = "SAMPLE_HS", by.y = "SAMPLE_HD")
+
+#Make tables for Fisher test: genotypic model
+table(merged$GROUP_HS, merged$ALLELE_HS)
+table(merged$GROUP_HD, merged$ALLELE_HD)
+
+#For HISAT-genotype2
+HISAT_TAB <- table(merged$GROUP_HS, merged$Genotype_HS)
+HISAT_TAB
+fisher.test(HISAT_TAB, conf.int = TRUE, conf.level = 0.95)
+chisq.test(HISAT_TAB)
+summary(HISAT_TAB)
+
+
+#For HLA-HD data
+HD_TAB <- table(merged$GROUP_HD, merged$Genotype_HD)
+HD_TAB
+fisher.test(HD_TAB, conf.int = TRUE, conf.level = 0.95)
+chisq.test(HD_TAB)
+summary(HD_TAB)
+
+
+```
+
+
+###Some extr prep I did but did not use... 
+```{r}
+
+#Prepare SGA data
+SGA_DRA<-SGA[grepl(("DRA"), SGA$ALLELE ), ]
+SGA_DRA<-reshape(transform(SGA_DRA, i = 1:2),
+                      idvar = c("SAMPLE", "ALLELE"), timevar = "i", direction = "wide")
+SGA_DRA<-SGA_DRA[, c(2,5,13,10)]
+colnames(SGA_DRA)<-c("SAMPLE_SGA", "ALLELE_1_SGA", "ALLELE_2_SGA" , "GROUP_SGA")
+
+SGA_DRA<- SGA_DRA %>% mutate(Genotype_SGA=case_when(
+                            ALLELE_1_SGA == "DRA*01:01" & ALLELE_2_SGA == "DRA*01:01" ~ "2", 
+                            ALLELE_1_SGA == "DRA*01:01" & ALLELE_2_SGA == "DRA*01:02" ~ "1",
+                            ALLELE_1_SGA == "DRA*01:02" & ALLELE_2_SGA == "DRA*01:01" ~ "1",
+                            ALLELE_1_SGA == "DRA*01:02" & ALLELE_2_SGA == "DRA*01:02" ~ "0"
+                            ))
+
+
+
+```
+
+
+
+
+
+
+
+

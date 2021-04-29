@@ -1,0 +1,106 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir = 'C:/Users/tijs/Documents/RademakersLab/R')
+
+```
+
+
+```{r}
+library(tidyverse)
+library(conflicted)
+library(data.table)  #fast aggregation/modification/adding of large data
+library(stringi)  #for stri_split_fixed function
+library(biomaRt)  #for attributing informationto ENS genes
+library(gtools)  #for mixedsort, not sure if I need this to order chromosomes
+
+```
+
+
+```{r}
+
+setwd("C:/Users/tijs/Documents/RademakersLab/THESIS/eQTL")
+genotypes<-data.frame(read.csv("hs_vcf_temp2.csv", header=T, sep=";"))
+
+setwd("C:/Users/tijs/Documents/RademakersLab/R")
+sampleinfo<-data.frame(read.csv("RNAseqSample_info.txt",header=T,sep="\t"))
+sampleinfo<-subset(sampleinfo,Age!="NA") #this removes sample without AAD
+
+samplealiases<-read.csv("sample_aliases.txt",header=F,sep="\t")
+names(samplealiases)<-c("seqid","sampleid")
+#Remove first useless character thingie in sampleid column
+samplealiases$sampleid<-sapply(stri_split_fixed(samplealiases$sampleid, '-', n=2),'[',2)
+
+#rename the groups according to the correct column
+sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-A']<-"TDP"
+sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-B']<-"TDP"
+sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-C']<-"TDP"
+sampleinfo$groups[sampleinfo$GROUP=='Control']<-"Control"
+#Selecton only the TDP and Controls
+sampleinfo<-sampleinfo[ grep("TDP|Control",sampleinfo$groups), ]
+#Subset the sampleinfo file
+sampleinfo<-sampleinfo[,c("SequencingID","Age","Sex", "groups","RINFCX","plate","GROUP")]
+
+#Rename the plates to make them match to 'genotypes' file
+sampleinfo$plate <- sub("Plate", "P", sampleinfo$plate)
+sampleinfo$plate <- sub("RR-", "", sampleinfo$plate)
+sampleinfo$plate <- sub("-", "", sampleinfo$plate)
+samplealiases$seqid <- sub("Plate", "P", samplealiases$seqid)
+samplealiases$seqid <- sub("RR-", "", samplealiases$seqid)
+samplealiases$seqid <- sub("-", "", samplealiases$seqid)
+
+
+#Replace the sample ID in the counts df with the actual STX ID using the samplealiases file
+for(i in 10:ncol(genotypes)){
+  for(j in 1:nrow(samplealiases)){
+      if(names(genotypes)[i]==samplealiases[j,1]){
+      names(genotypes)[i]=samplealiases[j,2];
+	}    
+    }
+}
+
+#write.table(genotypes,"genotypes.csv",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = F,col.names=T)
+
+```
+
+
+###Attributing chromosome, start and end to the ENS genes
+```{r}
+setwd("C:/Users/tijs/Documents/RademakersLab/THESIS/eQTL")
+Resid<-data.frame(read.csv("FCX_Table_residuals.tsv", header=T, sep="\t"))
+
+mart <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
+genes <- Resid$ID
+G_list <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","hgnc_symbol","chromosome_name","start_position", "end_position"), values=genes, mart= mart)
+Resid1<-merge(Resid, G_list, by.x="ID", by.y="ensembl_gene_id")
+Resid1<-Resid1[, c(91:95,1,2:90)]
+
+#Adjusting some colnames and removing hgnc_symbol and symbol columns
+Resid1<-subset(Resid1, select = -c(hgnc_symbol, symbol))
+names(Resid1)[names(Resid1) == "chromosome_name"]<- "#Chr"
+names(Resid1)[names(Resid1) == "start_position"]<- "start"
+names(Resid1)[names(Resid1) == "end_position"]<- "end"
+
+#First add Chr in front of all values in first col
+#Then sort by chromosome and then by starting position
+Resid1$`#Chr` <- sub("^", "chr", Resid1$`#Chr`)
+chrOrder<-c(paste("chr",1:22,sep=""),"chrX","chrY","chrM")
+Resid1$`#Chr`<-factor(Resid1$`#Chr`, levels=chrOrder)
+Resid1$`#Chr`
+Resid1 <-Resid1[order(Resid1$`#Chr`),]
+#Put in OMIT NA option
+
+write.table(Resid1,"phenotypes.csv",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = F,col.names=T)
+
+
+```
+
+
+
+
+
+

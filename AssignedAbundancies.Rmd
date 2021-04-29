@@ -1,0 +1,68 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir = 'C:/Users/tijs/Documents/RademakersLab/R')
+
+```
+
+
+```{r}
+setwd("C:/Users/tijs/Documents/RademakersLab/R")
+
+
+#Loading libraries
+library(tidyverse)
+library(stringi)
+library(stringr)
+library(data.table)
+library(tibble)
+library(dplyr)
+library(conflicted) #Decide between functions that overlap between packages
+library(tidyr)
+
+
+```
+
+
+```{r}
+
+ped<-data.frame(read.csv("HISAT_Summary.csv",header=T,sep="\t"))
+
+ped$FILE <- gsub(".*/", "", ped$FILE)
+ped$FILE <- sub("hisatgenotype_result_", "RR.", ped$FILE)
+ped$FILE <- sub(".report", "", ped$FILE)
+ped$FILE <- gsub(".{4}$", "", ped$FILE)
+ped$FILE <- sub("P1", "Plate1.", ped$FILE)
+ped$FILE <- sub("P2", "Plate2.", ped$FILE)
+ped<-column_to_rownames(ped, "FILE")
+
+ped[ped == 0]<- "-9"
+#snptest4[snptest4 == 0]<-NA
+ped[ped== 1]<- "A"
+
+#add necessary info for ped file
+ped1<-ped
+ped1<- as.data.frame(ped1) %>% rownames_to_column( "seqid")
+ped1<-merge(ped1, samplealiases, by.x="seqid", by.y="seqid")
+ped1<-merge(ped1, sampleinfo, by.x="sampleid", by.y="SequencingID")
+ped1["a"]<-0
+ped1["b"]<-0
+#♦change column order
+ped1<-ped1[,c(1,2,1207,1208,1214,1215,1209,1210,1211,1212,1213,3:1206)]
+ped1<-ped1[!(ped1$sampleid=="NA06-301" ), ] #Remove bad sample
+ped1<-ped1[, !(colnames(ped1) %in% c("X","Age","RINFCX","plate","GROUP"))]
+
+#Assigning binary values to sex and group
+ped1$Sex[ped1$Sex=='M']<-"1"
+ped1$Sex[ped1$Sex=='F']<-"2"
+ped1$groups[ped1$groups=='TDP']<-"2"
+ped1$groups[ped1$groups=='Control']<-"1"
+
+
+write.table(ped1,"HISAT_ABadj.csv",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = TRUE, col.names=NA)
+
+```
+

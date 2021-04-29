@@ -1,0 +1,66 @@
+---
+title: "LolliPopPlot"
+output: html_notebook
+---
+
+```{r}
+
+###SetupDir
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir = 'C:/Users/tijs/Documents/RademakersLab/R')
+
+```
+
+###load libraries
+```{r}
+setwd("C:/Users/tijs/Documents/RademakersLab/R")
+
+#Loading libraries
+library(stringi)
+library(data.table)
+library('biomaRt')
+library(RColorBrewer)
+library(tidyverse)
+
+library(Gviz)
+library(rtracklayer)
+library(trackViewer)
+
+```
+
+###LoliPopPlot
+```{r}
+#SNP locations
+SNP<-c(3332, 3380, 3991)
+#IDUNNOOYET
+gr<-GRanges("chr6", IRanges(SNP, width = 1, names = paste0("SNP", SNP)))
+#Coding regions
+feat<- GRanges("chr6", IRanges(c(65, 2526, 3299, 3870),
+                               width = c(81, 281, 281, 154),
+                               names = paste0("exon", 1:4)))
+lolliplot(gr, feat)
+
+feat$fill <- "#51C6E6"
+gr$color <- c("#1F78B4", "#1F78B4", "#E31A1C")
+gr$border <- sample(("gray30"), length(SNP), replace=TRUE)
+leg<-c("silent", "silent", "missense")
+gr$leg<- leg
+
+lolliplot(gr, feat, legend = "leg")
+
+
+gr.rot <- gr
+gr.rot$label.parameter.rot <- 45
+lolliplot(gr.rot, feat, legend="leg")
+
+#rs7192, also known as Leu242Val, G>T, position 32443869 (3991).
+display.brewer.all(colorblindFriendly = T)
+brewer.pal(n=9, name = "Paired")
+display.brewer.pal(n=9, name = "Paired")
+
+```
+
+
+
+
+

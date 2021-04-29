@@ -1,0 +1,204 @@
+---
+title: "Comparison EdgeR and LinMod"
+output: html_notebook
+---
+
+###SetupDir
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir = 'C:/Users/tijs/Documents/RademakersLab/R')
+
+```
+
+###load libraries
+```{r}
+setwd("C:/Users/tijs/Documents/RademakersLab/R")
+
+library(tidyverse)
+library(data.table)
+library(stringi)
+library('biomaRt')
+library(VennDiagram)
+library(ggpmisc)    #For the stat_poly_eq function in the ggplots
+library(EnhancedVolcano)
+library(RColorBrewer)
+library(viridis)
+
+```
+
+###Load and set up datasets
+```{r}
+setwd("C:/Users/tijs/Documents/RademakersLab/R/RNAseq")
+Linm <- data.frame(read.table("FCX_Table_residuals.txt",header=T,sep="\t"))
+Linm_df <- data.frame(read.table("Expression_data.txt",header=T,sep="\t"))
+sampleinfo <- data.frame(read.table("RNAseqSample_info.txt",header=T,sep="\t"))
+
+setwd("C:/Users/tijs/Documents/RademakersLab/R/RNAseq/EdgeR")
+EdgeR_df <- data.frame(read.table("RESULTSedgeR_RNAseq.txt",header=T,sep="\t"))
+
+```
+
+###Compare data from both aligners
+```{r}
+options( stringsAsFactors = FALSE)
+venni <- list(`LinMod` = Linm_df$symbol,
+              `EdgeR` = EdgeR_df$symbol)
+
+overlap<-calculate.overlap(x=venni)
+
+vennplot<-draw.pairwise.venn(area1 = 17933,
+                   area2 = 20738,
+                   cross.area = 14494,
+                   main= "Identified genes" ,
+                   category = c("LinMod","EdgeR"),
+                   #fill=c("#99CCFF", "#CC33CC"),
+                   fill=c("#B0A9C7", "#FF8370"),
+                   alpha = 0.4,
+                   #col=c("#99CCFF", "#CC33CC"),
+                   col= c("#B0A9C7", "#FF8370"),
+                   lwd=1,
+                   euler.d=TRUE,
+                   scaled = TRUE,
+                   print.mode = c("raw","percent"),
+                   cex = 1.1,
+                   cat.cex = 1.3,
+                   cat.dist = c(0.03,0.03),
+                   ext.text = FALSE,
+                   rotation.degree=30,
+                   )
+grid.draw(vennplot)
+
+```
+
+###Compare changes in expression of the common genes
+```{r}
+#merge all commonly found genes
+matches<-merge(EdgeR_df, Linm_df , by.x="symbol", by.y="symbol")
+matches<-matches[, c(1,2,3,6,7,14,11,12,10)]
+names(matches)<- c("Symbol", "Ens_ID", "Log2FC_E", "Pvalue_E", "FDR_E", "log2FC_L", "Pvalue_L", "FDR_L", "FC_L")
+#custom colors preparation: make column with absolute value of the difference between both log values
+matches$dif <- abs(matches$Log2FC_E - matches$log2FC_L)
+mp=mean(matches$dif)
+
+my.formula <- y ~ x
+
+g1<-ggplot(matches, aes(Log2FC_E, log2FC_L, color=dif)) +
+      geom_point() + 
+      geom_smooth(method="lm", se=F, color="orangered3", formula = my.formula) +
+      labs(subtitle="Expression of overlapping genes", y="Log2FC (lin)", x="log2FC (gb)", title="Log fold change differences between Marka's model and EdgeR") +
+      stat_poly_eq(formula = my.formula, 
+               aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+               parse = TRUE)
+
+cor.test(x = matches$Log2FC_E, y = matches$log2FC_L, method = "pearson")
+
+#cor.test(x = matches$Log2FC_E, y = matches$log2FC_L, method = "spearman") is for ordinal variables     
+
+g1
+
+g1 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+#customize colors for gradient here
+g2 <- ggplot(matches, aes(Log2FC_E, log2FC_L, color=dif)) +
+      geom_point() + 
+      geom_smooth(method="lm", se=F, color="black", formula = my.formula) +
+      labs(subtitle="Expression of overlapping genes", y="Log2FC (lin)", x="log2FC (gb)", title="Log fold change differences between Marka's model and EdgeR") +
+      stat_poly_eq(formula = my.formula, 
+               aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+               parse = TRUE) +
+      theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+      scale_color_gradient2(midpoint=mp, low="#FFC620", mid="#1C1738", high="#6047FF")
+g2
+
+
+```
+
+###HLA genes only
+```{r}
+m_HLA<- matches[grepl (c("HLA-"), matches$Symbol) , ]
+
+
+ggplot(m_HLA, aes(Log2FC_E, log2FC_L, color=dif)) +
+      geom_point() + 
+      geom_smooth(method="lm", se=F, color="black", formula = my.formula) +
+      labs(subtitle="Expression of overlapping genes", y="Log2FC (lin)", x="log2FC (gb)", title="Log fold change differences between Marka's model and EdgeR") +
+      stat_poly_eq(formula = my.formula, 
+               aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+               parse = TRUE) +
+        geom_label_repel(aes(label=Symbol),colour="black", size=3, lineheight=0.7, max.overlaps = Inf ) +
+      theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+      scale_color_gradient2(midpoint=mp, low="#FFC620", mid="#1C1738", high="#6047FF")
+
+cor.test(x = m_HLA$Log2FC_E, y = m_HLA$log2FC_L, method = "pearson")
+
+```
+
+
+###Two volcanoes
+```{r}
+V1<- EnhancedVolcano(Linm_df,
+    lab = as.character(Linm_df$symbol),
+    x = 'Log2FC',
+    y = 'Pvalue_fdr',
+    xlim = c(min(Linm_df[["Log2FC"]], na.rm = TRUE) - 2.0, max(Linm_df[["Log2FC"]], na.rm = TRUE) +
+2.0),
+    ylim = c(0, max(-log10(Linm_df[["Pvalue_fdr"]]), na.rm = TRUE) + 0.5),
+    axisLabSize = 10.0,
+    title = 'DGE TDP vs Controls',
+    titleLabSize = 13.0,
+    subtitle = 'Marka\'s linear model',
+    subtitleLabSize = 10.0,
+    captionLabSize = 9.0,
+    pCutoff = 0.05,
+    FCcutoff = 1.0,
+    pointSize = 0.1,
+    labSize = 3.5,
+    labCol = "black",
+    #drawConnectors = TRUE,
+    #widthConnectors = 0.5,
+    col=c("#B0A9C7", "#6047FF", "#1C1738", "#FF8370" ),
+    colAlpha = 0.75,
+    legendLabels=c('Not significant',expression(Log[2]~FC), expression(italic (p-value)),  expression(italic(p)~and~Log[2]~FC)),
+    legendPosition = 'right',
+    legendLabSize = 10,
+    legendIconSize = 2.0,
+    gridlines.major = TRUE,
+    gridlines.minor = TRUE,
+    border = "full",
+    borderWidth = 0.5)
+
+ V2<-EnhancedVolcano(EdgeR_df,
+    lab = as.character(EdgeR_df$symbol),
+    x = 'logFC.TDPvsControls',
+    y = 'FDRpvalue.TDPvsControls',
+    xlim = c(min(EdgeR_df[["logFC.TDPvsControls"]], na.rm = TRUE) - 2.0, max(EdgeR_df[["logFC.TDPvsControls"]], na.rm = TRUE) +
+2.0),
+    ylim = c(0, max(-log10(EdgeR_df[["FDRpvalue.TDPvsControls"]]), na.rm = TRUE) + 0.5),
+    axisLabSize = 10.0,
+    title = 'DGE TDP vs Controls',
+    titleLabSize = 13.0,
+    subtitle = 'EdgeR',
+    subtitleLabSize = 10.0,
+    captionLabSize = 9.0,
+    pCutoff = 0.05,
+    FCcutoff = 1.0,
+    pointSize = 0.1,
+    labSize = 3.5,
+    labCol = "black",
+    #drawConnectors = TRUE,
+    #widthConnectors = 0.5,
+    col=c("#B0A9C7", "#6047FF", "#1C1738", "#FF8370" ),
+    colAlpha = 0.75,
+    legendLabels=c('Not significant',expression(Log[2]~FC), expression(italic (p-value)),  expression(italic(p)~and~Log[2]~FC)),
+    legendPosition = 'right',
+    legendLabSize = 10,
+    legendIconSize = 2.0,
+    gridlines.major = TRUE,
+    gridlines.minor = TRUE,
+    border = "full",
+    borderWidth = 0.5)
+
+V1 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank())
+V2 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank())
+
+```
+

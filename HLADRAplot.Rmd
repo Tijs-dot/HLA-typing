@@ -34,12 +34,14 @@ library(gtools)
 library('biomaRt')
 library("EnhancedVolcano")
 library(tibble)
+library(reshape2)
+
 ```
 
 ###Preparation of the data
 ```{r}
 
-test<-residf1_output
+
 
 #(file = paste("run_",format(Sys.time(),"%Y%m%d-%Hu%M"),"_lm.log",sep=""), append = TRUE, split=TRUE,type = "output")
 sampleinfo<-data.frame(read.csv("RNAseqSample_info.txt",header=T,sep="\t"))
@@ -65,6 +67,7 @@ subsampleinfo<-sampleinfo[ grep("TDP|Control",sampleinfo$groups), ]
 #Subset the sampleinfo file
 subsampleinfo<-subsampleinfo[,c("SequencingID","Age","Sex", "groups","RINFCX","plate","GROUP")] 
 
+test<-residf1_output
 #grab only HLA DRA from the expression output
 DRA<-test[,"ENSG00000204287", drop=FALSE]
 DRA<-setDT(DRA, keep.rownames = TRUE)[]
@@ -72,7 +75,7 @@ colnames(DRA)[1] <- "SeqID"
 DRA<-merge(DRA, subsampleinfo, by.x="SeqID", by.y="SequencingID")
 
 
-Alleles<-data.frame(read.csv("HISAT_Summary.data.csv",header=T,sep=";"))
+Alleles<-data.frame(read.csv("HISAT_Summary.data.csv",header=T,sep="\t"))
 dral<-Alleles[,c("FILE","DRA.01.01","DRA.01.02")]
 rm(Alleles)
 
@@ -96,28 +99,70 @@ dral<-dral[,c(1:5,8)]
 scplot<-dral
 scplot<-as_tibble(scplot)
 
-scplot$DRA.01.01<-as.numeric(gsub(",",".",scplot$DRA.01.01))
-scplot$DRA.01.02<-as.numeric(gsub(",",".",scplot$DRA.01.02))
-
-
-
 #write.table(scplot,"scplot",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = TRUE,col.names=NA)
 
 
 #insert new column based on genotype
-scplot<-scplot %>% mutate (Genotype=case_when(DRA.01.01<30 ~"Homozygous DRA:01:02",
-                                              DRA.01.01>=30 & DRA.01.01<70~"Heterozygous",
-                                              DRA.01.01>=70~"Homozygous DRA:01:01"))
+names(scplot)[names(scplot) == 'ENSG00000204287'] <- 'DRAexp'
+scplot<-scplot %>% mutate (Genotype=case_when(DRA.01.01<30 ~"01:02/01:02",
+                                              DRA.01.01>=30 & DRA.01.01<70~"01:02/01:01",
+                                              DRA.01.01>=70~"01:01/01:01"))
+scplot<-scplot %>% mutate (GenoVal=case_when(DRA.01.01<30 ~"1",
+                                              DRA.01.01>=30 & DRA.01.01<70~"2",
+                                              DRA.01.01>=70~"3"))
+
+
+t.test(DRAexp ~ Genotype, data=scplot , var.equal=TRUE, alternative="less" )
+t.test(DRAexp ~ groups, data=scplot , var.equal=TRUE, alternative="less" )
+boxplot(DRAexp ~ groups, data=scplot)
+
+sccon <- subset(scplot, scplot$groups=="Control")
+sctdp <- subset(scplot, scplot$groups=="TDP")
+t.test(DRAexp ~ Genotype, data=sccon , var.equal=TRUE, alternative="less" )
+boxplot(DRAexp ~ Genotype, data=sccon)
+t.test(DRAexp ~ Genotype, data=sctdp , var.equal=TRUE, alternative="less" )
+boxplot(DRAexp ~ Genotype, data=sctdp)
+
+
+ggplot(sccon, aes(Genotype, DRAexp)) + 
+  theme_light() +
+  theme(legend.position="None") +
+  coord_cartesian(ylim = c(-3,3) ) +
+  scale_colour_brewer(palette = "Set1") +
+  geom_point(aes(colour=Genotype),position = position_jitter(0.1) ) +
+  geom_boxplot(alpha = 0.2, width = 0.1) +
+  labs(title="Normalized HLA-DRA expression", subtitle="Control samples, n=24", y="Expression", x="Genotype", caption="Expression level analysis")
+
+ggplot(sctdp, aes(Genotype, DRAexp)) + 
+  theme_light() +
+  theme(legend.position="None") +
+  coord_cartesian(ylim = c(-3,3) ) +
+  scale_colour_brewer(palette = "Set1") +
+  geom_point(aes(colour=Genotype),position = position_jitter(0.1) ) +
+  geom_boxplot(alpha = 0.2, width = 0.1) +
+  labs(title="Normalized HLA-DRA expression", subtitle="FTLD-TDP patient samples, n=65", y="Expression", x="Genotype", caption="Expression level analysis")
+  
+
 
 #Jittered
-ggplot(scplot, aes(groups, ENSG00000204287)) + 
+ggplot(scplot, aes(Genotype, DRAexp)) + 
   ylab("Residuals")+
   theme_light() +
-  geom_point(aes(colour=Genotype,),position = position_jitter(0.2)) +
-  geom_boxplot(alpha = 0, width = 0.2)
+  geom_point(aes(colour=Genotype),position = position_jitter(0.2) ) +
+  geom_boxplot(alpha = 0.2, width = 0.15)
+
+ggplot(scplot, aes(Genotype, DRAexp)) + 
+  theme_light() +
+  theme(legend.position="None") +
+  #coord_cartesian(ylim = c(-3,3) ) +
+  scale_colour_brewer(palette = "Set1") +
+  geom_point(aes(colour=Genotype),position = position_jitter(0.2) ) +
+  geom_boxplot(alpha = 0.2, width = 0.15) +
+  labs(title="Normalized HLA-DRA expression", subtitle="FTLD-TDP patient and control samples, n=89", y="Expression", x="Genotype", caption="Expression level analysis")
+  
 
 #Unjittered
-ggplot(scplot, aes(groups, ENSG00000204287)) + 
+ggplot(scplot, aes(groups, DRAexp)) + 
   ylab("Residuals")+
   theme_light() +
   geom_point(aes(colour=Genotype)) +

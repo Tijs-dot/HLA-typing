@@ -1,0 +1,488 @@
+---
+title: "EdgeR"
+output: html_notebook
+---
+
+###SetupDir
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir = 'C:/Users/tijs/Documents/RademakersLab/R')
+
+```
+
+###load libraries
+```{r}
+setwd("C:/Users/tijs/Documents/RademakersLab/R")
+
+#Loading libraries
+library(stringi)
+library(edgeR)
+library(data.table)
+library(org.Hs.eg.db)
+library(gtools)
+library('biomaRt')
+library("EnhancedVolcano")
+library("anRichment")
+library(tibble)
+library(dplyr)
+library(RColorBrewer)
+library(tidyverse)
+library(gplots)
+
+```
+
+###Prepare dataframes
+```{r}
+
+options( stringsAsFactors = FALSE)
+
+counts <- data.frame(read.csv("RNAseqCounts.csv",header=T,sep=";"))
+names(counts) <- sub("X.home.MOLGEN.twatzeels.app.featureCounts.results.BAM_20210207.", "", names(counts))
+names(counts) <- sub(".bam", "", names(counts))
+
+#load sample info
+sampleinfo<-data.frame(read.csv("RNAseqSample_info.txt",header=T,sep="\t"))
+sampleinfo<-subset(sampleinfo,Age!="NA") #this removes one sample without AAD
+
+#Put the plate number in the plate column of the sampleinfo df
+sampleinfo$plate<-sapply(stri_split_fixed(sampleinfo$plate, '-', n=3),'[',2)
+sampleinfo<-sampleinfo[!(sampleinfo$SequencingID == "NA06-301"),]
+
+#rename the groups according to the correct column
+sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-A']<-"TDP"
+sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-B']<-"TDP"
+sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-C']<-"TDP"
+sampleinfo$groups[sampleinfo$GROUP=='Control']<-"Control"
+
+sampleinfo<-sampleinfo[ grep("TDP|Control",sampleinfo$groups), ]
+sampleinfo<-sampleinfo[,c("SequencingID","Age","Sex", "groups","RINFCX","plate","GROUP")] 
+
+samplealiases<-read.csv("sample_aliases.txt",header=F,sep="\t")
+names(samplealiases)<-c("seqid","sampleid")
+samplealiases$sampleid<-sapply(stri_split_fixed(samplealiases$sampleid, '-', n=2),'[',2)
+samplealiases$seqid<-gsub("-", ".", samplealiases$seqid)
+sampleinfo<-merge(sampleinfo, samplealiases, by.x="SequencingID" , by.y="sampleid")
+sampleinfo<-sampleinfo[,c(1,8,2:7)]
+
+for(i in 7:ncol(counts)){
+  for(j in 1:nrow(samplealiases)){
+      if(names(counts)[i]==samplealiases[j,1]){
+      names(counts)[i]=samplealiases[j,2];
+	}    
+    }
+}
+
+toadd<-read.table("merged_gene_count.csv",header=T,sep=";")
+
+toadd<- toadd[,1:7]
+#library(data.table)
+test<-merge(counts, toadd, by.x="Geneid", by.y="GeneId")
+test<-test[, c(1,97:102,7:96)]
+names(test)[3:5]<-c("Start", "End", "Length")
+counts<-test
+#rm(samplealiases, test)
+
+```
+
+###Split counts into two different datasets
+```{r}
+annotcountsraw<-counts[,1:7]
+countsraw <- counts[,-c(1:7)]
+rownames(countsraw)<-counts$Geneid
+countsraw<-countsraw[, (names(countsraw) %in% sampleinfo$SequencingID)]
+colnames(countsraw)
+
+```
+
+###Create DGEList
+```{r}
+#Create an 'ideal' linear model, then add e.g. group to the model
+#This will have an influence, so we want to see what the effect of the group is
+#Create factors
+sampleinfo<-sampleinfo[order(sampleinfo$seqid),]
+sampleinfo
+group<-factor(sampleinfo$groups)
+age<-sampleinfo$Age
+RIN<-sampleinfo$RINFCX
+sex<-as.factor(sampleinfo$Sex)
+
+#Design matrix, put in covariates
+#Try to add the the most important covariate first (RIN has strong effect, trust me)
+design<-model.matrix(~RIN+age+sex+group)
+
+#Filter your data (EdgeR works with DGELists, rather than dataframes)
+y<-DGEList(counts=countsraw, group=group)
+#Filter all genes you wanna keep
+keep<-filterByExpr(y)
+y<-y[keep,,keep.lib.sizes = FALSE]
+dim(y$counts)
+
+```
+
+###TMM Normalization
+```{r}
+y<- calcNormFactors(y)
+
+```
+
+###Visualization PCA
+```{r}
+#make dataframe with expression data. 
+#Prior count is to fake a count value to deal with log values of 0. Default is 5.
+Expr_data<-cpm(y, log=TRUE, prior.count=5)
+
+#Create principal components (has to be done on log transformed data)
+PC <- prcomp(t(Expr_data))
+PCi<-data.frame(PC$x, groups= group)
+
+#Create a PNG file, with width, height and resolution specified
+#In publications, 300 is minimum
+png("PCA1_edgeR.png", width = 12, height = 8, units = 'in',res=300)
+
+ggplot(PCi,aes(x=PC1,y=PC2,col=group))+
+geom_point(size=3,alpha=0.5)+ 
+#scale_color_manual(values = c("#88CCEE", "#AA4499", "#44AA99" ))+ 
+stat_ellipse()+
+theme(axis.text=element_text(size=24), axis.title=element_text(size=26,face="bold"))
+
+dev.off()
+
+summary(PC)
+
+```
+
+###Heatmap
+```{r}
+#Estimate the variance for each row in the logcounts matrix
+#Apply is a function to apply another function (here we apply the var function)
+var_genes <- apply(Expr_data, 1, var)
+
+#Get top 500 most variable genes
+select_var <- names(sort(var_genes, decreasing=TRUE))[1:500]
+
+#Subset logcounts matrix
+highly_variable_lcpm <- as.matrix(Expr_data[select_var,])
+
+#Set colors for “group” legend
+col.cell2 <-as.character(c("Control"="#F3EFE0","FTLD-TDP-A" ="#1B7837","FTLD-TDP-C"="#5AAE61","FTLD-TDP-B"="#A6DBA0" )[sampleinfo$GROUP])
+class(col.cell2)
+
+testcol<-colorRampPalette(brewer.pal(10, "RdYlBu"))(256)
+
+# Plot the heatmap
+Colv=FALSE
+
+png("./EdgeR/Heatmap_FTLD-TDP_500_pearson.png", width = 12, height = 8, units = 'in',res=300)
+heatmap.2(highly_variable_lcpm,Colv=TRUE,  col=rev(morecols(50)),
+          trace="none", 
+          main="Top 1000 most variable genes across samples",
+          ColSideColors=col.cell2,
+          scale="row",key = TRUE, labRow=FALSE,  labCol = FALSE, 
+          distfun = function(x) as.dist(1-cor(t(x))),
+  hclustfun = function(x) hclust(x, method="average"), dendrogram="column", reorderfun=function(d, w) reorder(d, w, agglo.FUN = mean))
+dev.off()
+
+Colv=FALSE
+
+col.cell3 <-as.character(c("Control"="#E78AC3","FTLD-TDP-A" ="#66C2A5","FTLD-TDP-C"="#A6D854","FTLD-TDP-B"="#8DA0CB" )[sampleinfo$GROUP])
+
+png("Heatmap_EdgeRTemp.png", width = 12, height = 8, units = 'in',res=300)
+heatmap.2(highly_variable_lcpm,
+  Colv=TRUE, 
+  col=testcol,
+  trace="none", main="Top 500 most variable genes",
+  ColSideColors= col.cell3,
+  scale="row",key = TRUE, key.title = NA, key.par = list(mar=c(8.5,4,4,4), mgp=c(1.5, 0.5, 0)),
+  labRow=FALSE, labCol = FALSE, 
+  distfun = function(x) as.dist(1-cor(t(x))),
+  hclustfun = function(x) hclust(x, method="average"), dendrogram="column", reorderfun=function(d, w) reorder(d, w, agglo.FUN = mean))
+
+legend("left",      
+    legend = unique(sampleinfo$GROUP) ,
+    col = col.cell3, 
+    lty= 1,             
+    lwd = 5,           
+    cex=0.95
+    )
+dev.off()
+
+
+```
+###Efkes uit de weg
+```{r}
+#Make heatmap, reorder function for the dendrogram
+#Dendrogram is for columns and columns are the samples
+#So Reordering will be done using the samples
+png("Heatmap_500_pearson.png", width = 12, height = 8, units = 'in',res=300)
+heatmap.2(highly_variable_lcpm,Colv=TRUE, 
+col=testcol,
+trace="none", main="Top 500 most variable genes",
+ColSideColors=col.cell2,
+scale="row",key = TRUE, labRow=FALSE, labCol = FALSE, distfun = function(x) as.dist(1-cor(t(x))),
+hclustfun = function(x) hclust(x, method="average"), dendrogram="column", reorderfun=function(d, w) reorder(d, w, agglo.FUN = mean))
+dev.off()
+
+display.brewer.all(colorblindFriendly = T)
+brewer.pal(n=8,"Set2")
+display.brewer.pal(n=8,"Set2")
+# "#66C2A5" "#A6D854" "#8DA0CB" "#E78AC3"
+brewer.pal(n=9,"PuBuGn")
+display.brewer.pal(n=9,"PuBuGn")
+#c("Control"="#A6BDDB","FTLD-TDP-A" ="#EF3B2C","FTLD-TDP-C"="#67000D","FTLD-TDP-B"="#FC9272" )
+
+```
+
+
+
+###Estimate dispersion
+```{r}
+#Necessary to make comparison between groups
+y<- estimateDisp(y, design)
+
+```
+
+###Make Comparison
+```{r}
+fit<- glmQLFit(y, design)
+
+```
+
+###Plot interesting genes
+```{r}
+residuals<-as.data.frame(fit$fitted.values)
+
+marth <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
+genesh <- annotcountsraw$Geneid
+G_listh <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","hgnc_symbol"),values=genesh,mart= marth)
+residuals <- as.data.frame(residuals) %>% rownames_to_column( "Geneid")
+residuals<-merge(residuals,G_listh,by.x="Geneid",by.y="ensembl_gene_id")
+rownames(residuals)=make.names(residuals$hgnc_symbol, unique=TRUE)
+
+annotcountsraw<-merge(annotcountsraw,G_listh,by.x="Geneid",by.y="ensembl_gene_id")
+#rm(marth,genesh,G_listh)
+rownames(annotcountsraw)=make.names(annotcountsraw$hgnc_symbol, unique=TRUE)
+
+annotcountsraw<-annotcountsraw[,c(2:7)]
+
+residuals<- residuals[order(row.names(residuals)),]
+annotcountsraw<- annotcountsraw[order(row.names(annotcountsraw)),]
+
+residuals<-residuals[,c(2:91)]
+list<-c("CTSD", "TFEB", "Grn", "TMEM106B", "TARDBP", "ZDHHC13")
+annot_subset<- subset(annotcountsraw,annotcountsraw$hgnc_symbol %in% list)
+residuals_subset<- subset(residuals,row.names(residuals) %in% row.names(annot_subset))
+
+residuals_subset<- residuals_subset[order(row.names(residuals_subset)),]
+annot_subset<- annot_subset[order(row.names(annot_subset)),]
+
+
+for(i in 1:nrow(residuals_subset)){
+gene<-data.frame(group=sampleinfo$groups,gene=t(residuals_subset[i,]),check.names=F)
+ensid<-rownames(residuals_subset[i,])
+colnames(gene)<-c("group","residuals")
+genesymbol<-annot_subset[i,"hgnc_symbol"]
+
+png(paste("gene_plots_",genesymbol,"_",ensid,".png",sep=""), width = 12, height = 8, units = 'in',res=200)
+
+p<-ggplot(gene,aes(x=group, y=residuals,fill=group)) + ggtitle(paste(genesymbol,"_", ensid,sep="\t"))+geom_violin(trim=FALSE)+geom_boxplot(width=0.1)+ geom_point(shape = 18,size=2)+theme(legend.position = "none")
+print(p)
+dev.off()
+}
+
+```
+
+###Make Contrast
+```{r}
+
+head(design)
+
+qlf.TDPvsCon <- glmQLFTest(fit, coef=5)
+topTags(qlf.TDPvsCon)
+summary(decideTests(qlf.TDPvsCon))
+plotMD(qlf.TDPvsCon)
+
+towrite1<-topTags(qlf.TDPvsCon, n=21117)
+
+results<-towrite1$table
+colnames(results)<- c("logFC.TDPvsControls","logCPM.TDPvsControls", "F.TDPvsControls", "Pvalue.TDPvsControls", "FDRpvalue.TDPvsControls")
+setDT(results, keep.rownames = "names")
+
+head(design)
+dim(design)
+
+#Mayo genelist instead of biomaRt
+results2<-merge(annotcountsraw, results, by.x="Geneid", by.y="names")
+
+#biomaRt
+genesi<-results$names
+marti <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
+G_listi <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","hgnc_symbol"),values=genesi,mart= marti)
+results<-merge(G_listi, results,by.x="ensembl_gene_id",by.y="names")
+names(results)[2]<-paste("symbol")
+
+write.table(results, "RESULTSedgeR_RNAseq.txt", sep="\t", row.names = F)
+
+
+#rm(genesi, marti, G_listi)
+
+```
+
+###Calulate fold change
+```{r}
+foldChange <- function(a1){
+ if(a1 > 0){
+  2^(a1 )
+ }
+ else{
+  -(2^(-a1))
+ }
+}
+
+
+for(i in 1:nrow(results)){
+  results$FC.TDPvscontrols[i] = foldChange(results$logFC.TDPvsControls[i])
+}
+
+```
+
+###Volcanoplot
+```{r}
+Volcano<-results[c("symbol", "logFC.TDPvsControls", "FDRpvalue.TDPvsControls")]
+colnames(Volcano)<-c("geneID", "log2FC", "pvalue_FDR")
+
+
+Volcano$significant<-ifelse(Volcano$log2FC < -log2(1.5) & Volcano$pvalue_FDR<0.05| Volcano$log2FC > log2(1.5) & Volcano$pvalue_FDR<0.05, "pFC",
+ifelse(Volcano$log2FC< -log2(1.5) & Volcano$pvalue_FDR>0.05 | Volcano$log2FC>log2(1.5) & Volcano$pvalue_FDR>0.05,"FC",
+ifelse(Volcano$log2FC > -log2(1.5) & Volcano$pvalue_FDR<0.05 | Volcano$log2FC < log2(1.5) & Volcano$pvalue_FDR<0.05,'p',
+'NS')))
+
+keyvals <- ifelse(
+Volcano$significant == "pFC", "#CC6677",
+ifelse(Volcano$significant == "FC", "#332288",
+ifelse(Volcano$significant == "p", "#44AA99", "#88CCEE")))
+
+names(keyvals)[keyvals == '#88CCEE'] <- "NS"
+names(keyvals)[keyvals == '#CC6677'] <- "p-value and log2 FC"
+names(keyvals)[keyvals == '#44AA99'] <- "p-value only"
+names(keyvals)[keyvals == '#332288'] <- "log2 FC"
+
+volcano1<-Volcano[order(Volcano$pvalue_FDR),]
+volcano1<-volcano1[1:20,]
+volclab<-volcano1$geneID
+
+
+EnhancedVolcano(Volcano,
+lab = as.character(Volcano$geneID),
+selectLab = volclab,
+x = 'log2FC',
+y = 'pvalue_FDR',
+xlim = c(-4,4),
+ylim = c(0, max(-log10(Volcano[["pvalue_FDR"]]), na.rm=TRUE) + 2.5),
+axisLabSize = 10,
+caption = NULL,
+subtitle = NULL,
+title="Volcano",
+legendLabels = c('NS', expression(Log[2]~FC),'p-value', expression(p-value~and~log[2]~FC)),
+legendPosition = 'bottom',
+legendLabSize =10,
+legendIconSize = 2.0,
+pCutoff = 0.05,
+FCcutoff=log2(1.5),
+labSize =3.0,
+pointSize=0.7,
+colCustom = keyvals,
+)
+
+```
+
+###TEMP
+```{r}
+
+png(file="Volcano_HT.png", width=3100, height=3000)
+plot(EnhancedVolcano(Volcano,
+lab = as.character(Volcano$geneID),
+x = 'log2FC',
+y = 'pvalue_FDR',
+selectLab = volclab,
+xlim = c(-4,4),
+ylim = c(0, max(-log10(Volcano[["pvalue_FDR"]]), na.rm=TRUE) + 2.5),
+axisLabSize = 10,
+caption = NULL,
+subtitle = NULL,
+title="Volcano",
+legendLabels = c('NS', expression(Log[2]~FC),'p-value', expression(p-value~and~log[2]~FC)),
+legendPosition = 'bottom',
+legendLabSize =10,
+legendIconSize = 2.0,
+pCutoff = 0.05,
+FCcutoff=log2(1.5),
+labSize =3.0,
+pointSize=0.7,
+colCustom = keyvals,
+)
+1)
+
+dev.off()
+
+
+labFace = 'bold',
+drawConnectors = TRUE,
+typeConnectors = "closed",
+endsConnectors = "last",
+lengthConnectors = unit(1, 'cm'),
+widthConnectors = 0.5,
+colConnectors = 'black',
+
+
+```
+
+
+
+###Gene Ontology
+```{r}
+GOcollection <- buildGOcollection(organism="human")
+
+#For downregulated genes
+Volcano %>% mutate(significant = ifelse(Volcano$log2FC < log2(1.1) & Volcano$pvalue_FDR < 0.1, "Significant", "Nonsignificant")) -> Volcano2
+
+Category<-Volcano2$significant
+table(Category)
+
+symbol2<-Volcano2$geneID
+
+# Some gene symbols have the form "XYZ /// ABC". Keep only the first symbol of all such multi-symbols.
+split = strsplit(symbol2, split = " /// ", fixed = TRUE);
+symbol = sapply(split, function(x) x[1]);
+# Convert symbols to Entrez IDs
+
+entrz <- convert2entrez(organism = "human", symbol = symbol)
+
+GOenrichment = enrichmentAnalysis(
+classLabels = Category, identifiers = entrz,
+refCollection = GOcollection,
+useBackground = "given",
+threshold = 0.1,
+getBonferroniCorrection = TRUE,
+thresholdType = "FDR",
+getOverlapEntrez = TRUE,
+getOverlapSymbols = TRUE)
+
+
+
+# column names
+names(GOenrichment)
+table.display = GOenrichment$enrichmentTable
+table.display$overlapGenes = shortenStrings(table.display$overlapGenes, maxLength = 70,
+split = "|")
+
+write.csv(GOenrichment$enrichmentTable, file ="GOenrichment-enrichmentTable_up.csv",
+row.names = FALSE)
+Results_GO<-GOenrichment$enrichmentTable
+
+print(paste0('There are ', nrow(Results_GO[Results_GO$class == "Significant" & Results_GO$FDR<0.05,]), ' significant term(s) in this analysis'))
+
+```
+
+
+
+
+

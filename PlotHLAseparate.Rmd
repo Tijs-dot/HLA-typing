@@ -72,10 +72,19 @@ test<-residf1_output
 #grab only the HLA genes from the expression output
 SubsetA<-test[,c("ENSG00000206503","ENSG00000234745", "ENSG00000204525", "ENSG00000196735", "ENSG00000179344", "ENSG00000237541", "ENSG00000232629", "ENSG00000204287", "ENSG00000196126", "ENSG00000198502", "ENSG00000231389", "ENSG00000223865", "ENSG00000204592", "ENSG00000204642", "ENSG00000204632", "ENSG00000204257", "ENSG00000204252", "ENSG00000241106", "ENSG00000242574")]
 
-#What about DPA2 and DPB2?
-#,"ENSG00000231461","ENSG00000224557"
+#Selecton only the TDP and Controls
+subsampleinfo<-sampleinfo[ grep("TDP|Control",sampleinfo$groups), ]
+
+#Subset the sampleinfo file
+subsampleinfo<-subsampleinfo[,c("SequencingID","Age","Sex", "groups","RINFCX","plate","GROUP")] 
+
 
 SubsetA<-data.frame(SubsetA, subsampleinfo)
+
+
+
+#What about DPA2 and DPB2?
+#,"ENSG00000231461","ENSG00000224557"
 
 
 ```
@@ -117,6 +126,14 @@ ggplot(scplot, aes(groups, ENSG00000234745,)) +
   geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
   )
 
+ggplot(scplot, aes(groups, ENSG00000234745,)) + 
+  ylab("HLA-B")+
+  theme_light()+
+  geom_point( aes(colour=groups), position=position_jitter(0.05) ) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
 
 ```
 
@@ -134,6 +151,13 @@ ggplot(scplot, aes(groups, ENSG00000204525,)) +
   geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
   )
 
+ggplot(scplot, aes(groups, ENSG00000204525,)) + 
+  ylab("HLA-C")+
+  theme_light()+
+  geom_point( aes(colour=groups), position=position_jitter(0.05) ) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
 
 ```
 
@@ -151,6 +175,13 @@ ggplot(scplot, aes(groups, ENSG00000196735,)) +
   geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
   )
 
+ggplot(scplot, aes(groups, ENSG00000196735,)) + 
+  ylab("HLA-DQA1")+
+  theme_light()+
+  geom_point( aes(colour=groups), position=position_jitter(0.05) ) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
 
 ```
 
@@ -222,6 +253,14 @@ ggplot(scplot, aes(groups, ENSG00000204287,)) +
   )
 
 
+ggplot(scplot, aes(groups, ENSG00000204287,)) + 
+  ylab("HLA-DRA")+
+  theme_light()+
+  geom_point( aes(colour=groups), position=position_jitter(0.05) ) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
 ```
 
 ###HLA-DRB1
@@ -256,6 +295,14 @@ ggplot(scplot, aes(groups, ENSG00000198502,)) +
   )
 
 
+ggplot(scplot, aes(groups, ENSG00000198502,)) + 
+  ylab("HLA-DRB5")+
+  theme_light()+
+  geom_point( aes(colour=groups), position=position_jitter(0.05) ) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
+
 ```
 
 ###HLA-DPA1
@@ -272,6 +319,13 @@ ggplot(scplot, aes(groups, ENSG00000231389,)) +
   geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
   )
 
+ggplot(scplot, aes(groups, ENSG00000231389,)) + 
+  ylab("HLA-DPA1")+
+  theme_light()+
+  geom_point( aes(colour=groups), position=position_jitter(0.05) ) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
 
 ```
 
@@ -289,6 +343,13 @@ ggplot(scplot, aes(groups, ENSG00000223865,)) +
   geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
   )
 
+ggplot(scplot, aes(groups, ENSG00000223865,)) + 
+  ylab("HLA-DPB1")+
+  theme_light()+
+  geom_point( aes(colour=groups), position=position_jitter(0.05) ) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
 
 ```
 
@@ -309,6 +370,14 @@ ggplot(scplot, aes(groups, ENSG00000204592,)) +
   geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
   )
 
+
+ggplot(scplot, aes(groups, ENSG00000204592,)) + 
+  ylab("HLA-E")+
+  theme_light()+
+  geom_point( aes(colour=groups), position=position_jitter(0.05) ) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
 
 ```
 
@@ -360,6 +429,13 @@ ggplot(scplot, aes(groups, ENSG00000204257,)) +
   geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
   )
 
+ggplot(scplot, aes(groups, ENSG00000204257,)) + 
+  ylab("HLA-DMA")+
+  theme_light()+
+  geom_point( aes(colour=groups), position=position_jitter(0.05) ) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
 
 ```
 
@@ -394,6 +470,14 @@ ggplot(scplot, aes(groups, ENSG00000204252,)) +
   geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
   )
 
+
+ggplot(scplot, aes(groups, ENSG00000204252,)) + 
+  ylab("HLA-DOA")+
+  theme_light()+
+  geom_point( aes(colour=groups), position=position_jitter(0.05) ) + 
+  geom_boxplot(alpha = 0, width = 0.3) + 
+  geom_violin(alpha=0.2, width=0.3, aes(fill=groups)
+  )
 
 ```
 

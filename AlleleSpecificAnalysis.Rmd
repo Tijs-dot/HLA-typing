@@ -1,0 +1,240 @@
+---
+title: "Allele-level analysis"
+output: html_notebook
+---
+
+
+
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir = 'C:/Users/tijs/Documents/RademakersLab/R')
+
+```
+
+```{r}
+setwd("C:/Users/tijs/Documents/RademakersLab/R")
+
+
+#Loading libraries
+library(tidyverse)
+library(stringi)
+library(cqn)
+library(emmeans)
+library(data.table)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(gtools)
+library('biomaRt')
+library("EnhancedVolcano")
+library("anRichment")
+library(tibble)
+library(dplyr)
+library(reshape2)
+library(RColorBrewer)
+library(ComplexHeatmap)
+
+```
+
+```{r}
+options( stringsAsFactors = FALSE)
+
+AlleleSummary<-data.frame(read.csv("RNAseqGTSum.csv",header=T, sep="\t"))
+AlleleSummary$SAMPLE<-gsub("L.","", AlleleSummary$SAMPLE)
+AlleleSummary<-AlleleSummary[!(AlleleSummary$SAMPLE == "P1B3"),]
+
+zygousity<- AlleleSummary[ , grepl( "SAMPLE|GENE|ZYG" , names( AlleleSummary ) ) ]
+zygousity[zygousity=="het"] <- "HET"
+zygousity[zygousity=="hom"] <- "HOM"
+
+
+zygousity3<-data.frame(read.csv("RNAseqzyg_temp.tsv",header=T, sep="\t"))
+
+zygousity3[is.na(zygousity3)] <- "Unknown"
+
+
+ggplot(zygousity3, aes(fill=forcats::fct_rev(ZYG), y=NUMBER, x=GENE)) +
+    geom_bar(position="fill" , stat="identity") +
+    theme(legend.title = element_blank(), legend.position = "top", legend.direction = "horizontal",legend.margin = margin(0,0,0,0), legend.box.margin = margin(-4,-4,-4,-4), panel.background =  element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(face = "bold", angle = 30) ) +
+    labs(y="Ratio", x="MHC Gene") +
+    scale_fill_manual(values= c("grey39", "#807DBA", "#54278F"), labels = c("Undetermined", "Homozygous", "Heterozygous") , guide = guide_legend(reverse = TRUE) )
+
+
+#Different Colors
+ggplot(zygousity3, aes(fill=forcats::fct_rev(ZYG), y=NUMBER, x=GENE)) +
+    geom_bar(position="fill" , stat="identity") +
+    theme(legend.title = element_blank(), legend.position = "top", legend.direction = "horizontal",legend.margin = margin(0,0,0,0), legend.box.margin = margin(-4,-4,-4,-4), panel.background =  element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(face = "bold", angle = 30) ) +
+    labs(y="Ratio", x="MHC Gene") +
+    scale_fill_manual(values= c("grey39", "dodgerblue4", "orange1"), labels = c("Undetermined", "Homozygous", "Heterozygous") , guide = guide_legend(reverse = TRUE) )
+
+
+```
+
+###Prepare dataframe patient vs control Separated barplot
+```{r}
+
+options( stringsAsFactors = FALSE)
+
+#load sample info
+sampleinfo<-data.frame(read.csv("RNAseqSample_info.txt",header=T,sep="\t"))
+sampleinfo<-subset(sampleinfo,Age!="NA") #this removes one sample without AAD
+
+#Put the plate number in the plate column of the sampleinfo df
+sampleinfo$plate<-sapply(stri_split_fixed(sampleinfo$plate, '-', n=3),'[',2)
+
+#rename the groups according to the correct column
+ sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-A']<-"TDP"
+ sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-B']<-"TDP"
+ sampleinfo$groups[sampleinfo$GROUP=='FTLD-TDP-C']<-"TDP"
+ sampleinfo$groups[sampleinfo$GROUP=='Control']<-"Control"
+
+sampleinfo<-sampleinfo[ grep("TDP|Control",sampleinfo$groups), ]
+sampleinfo<-sampleinfo[,c("SequencingID","Age","Sex", "groups","RINFCX","plate","GROUP")] 
+
+samplealiases<-read.csv("sample_aliases.txt",header=F,sep="\t")
+names(samplealiases)<-c("seqid","sampleid")
+samplealiases$sampleid<-sapply(stri_split_fixed(samplealiases$sampleid, '-', n=2),'[',2)
+samplealiases$seqid<-gsub("-", ".", samplealiases$seqid)
+sampleinfo1<-merge(sampleinfo, samplealiases, by.x="SequencingID" , by.y="sampleid")
+sampleinfo<-sampleinfo1[,c(1,8,2:5)]
+sampleinfo$seqid <- gsub("RR.Plate", "P", sampleinfo$seqid ) 
+sampleinfo$seqid <- gsub("\\.", "", sampleinfo$seqid ) 
+sampleinfo<-sampleinfo[!(sampleinfo$seqid == "P1B3"),]
+
+test1<-sampleinfo[,c(2,5)]
+test1<- merge(test1, zygousity3, by.x= "seqid", by.y="SAMPLE")
+
+```
+
+###Plot
+```{r}
+ggplot(zygousity3, aes(fill=forcats::fct_rev(ZYG), y=NUMBER, x=GENE)) +
+    geom_bar(position="fill" , stat="identity") +
+    theme(legend.title = element_blank(), legend.position = "top", legend.direction = "horizontal",legend.margin = margin(0,0,0,0), legend.box.margin = margin(-4,-4,-4,-4), panel.background =  element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(face = "bold", angle = 30) ) +
+    labs(y="Ratio", x="MHC Gene") +
+    scale_fill_manual(values= c("#B0A9C7", "#1C1738", "#6047FF"), labels = c("Undetermined", "Homozygous", "Heterozygous") , guide = guide_legend(reverse = TRUE) )
+
+
+ggplot(test1, aes(x=groups, y=NUMBER, fill=forcats::fct_rev(ZYG))) +
+  geom_bar(stat="identity", position="fill", width = 1) +
+  facet_grid(~GENE) +
+  theme(strip.background = element_rect(color="black", fill="white"), strip.text.x = element_text(angle=90), panel.spacing = unit(0.1, "lines")) +
+  theme(legend.title = element_blank(), legend.position = "top", legend.direction = "horizontal",legend.margin = margin(0,0,0,0), legend.box.margin = margin(-4,-4,-4,-4), panel.background =  element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(face = "bold") ) +
+  labs(y="Ratio", x="MHC Gene") +
+  scale_x_discrete(labels=c("C", "P")) +
+  scale_fill_manual(values= c("#B0A9C7", "#1C1738", "#6047FF"), labels = c("Undetermined", "Homozygous", "Heterozygous") , guide=guide_legend(reverse = TRUE) )
+
+#"grey39", "springgreen4", "hotpink1"
+
+```
+
+
+
+
+#### #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### #### ####
+
+###WGS data
+```{r}
+WGSdata<-data.frame(read.table("MAYO_Sample.summary_list.csv", header = TRUE, sep=";"))
+colnames(WGSdata)[2] <- "GENE"
+
+new_DF1 <- subset(WGSdata, is.na(WGSdata$ZYG))
+new_DF1
+
+WGSzyg<- WGSdata[ , c(1,2,5,9) ]
+WGSzyg[WGSzyg=="het"] <- "HET"
+WGSzyg[WGSzyg=="hom"] <- "HOM"
+
+sum(is.na(WGSzyg$ZYG))
+WGSzyg<-na.omit(WGSzyg) #For now
+
+#rm(new_DF1)
+
+```
+
+###Prepare dataframe patient vs control Separated barplot
+```{r}
+
+options( stringsAsFactors = FALSE)
+
+#load sample info
+sampleinfoWGSall<-data.frame(read.csv("WGSsampleinfo.txt",header=T,sep="\t"))
+sampleinfoWGS<-sampleinfoWGSall[,c(2,9,20,21)]
+colnames(sampleinfoWGS)[3:4] <- c("age","GROUP")
+#sampleinfoWGS<-subset(sampleinfoWGS,age!="NA") #this removes one sample without AAD
+
+unique(sampleinfoWGS$group)
+
+#rename the groups according to the correct column
+ sampleinfoWGS$groups[sampleinfoWGS$GROUP=='FTLD-TDP - Asian']<-"FTLD-TDP"
+ sampleinfoWGS$groups[sampleinfoWGS$GROUP=='FTLD-TDP-Race']<-"FTLD-TDP"
+ sampleinfoWGS$groups[sampleinfoWGS$GROUP=='FTLD-TDP']<-"FTLD-TDP"
+ sampleinfoWGS$groups[sampleinfoWGS$GROUP=='Control']<-"Control"
+
+sampleinfoWGS<-sampleinfoWGS[,c(1,2,3,5)]
+
+test1<- merge(sampleinfoWGS, WGSzyg, by.x= "sampleid", by.y="SAMPLE")
+
+```
+
+###Plot distribution of homozygous vs heterozygous
+```{r}
+ggplot(WGSzyg, aes(fill=forcats::fct_rev(ZYG), y=NUMBER, x=GENE)) +
+    geom_bar(position="fill" , stat="identity") +
+    theme(legend.title = element_blank(), legend.position = "top", legend.direction = "horizontal",legend.margin = margin(0,0,0,0), legend.box.margin = margin(-4,-4,-4,-4), panel.background =  element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(face = "bold", angle = 30) ) +
+    labs(y="Ratio", x="MHC Gene") +
+    scale_fill_manual(values= c("#1C1738", "#6047FF"), labels = c("Homozygous", "Heterozygous") , guide = guide_legend(reverse = TRUE) )
+
+
+ggplot(test1, aes(x=groups, y=NUMBER, fill=forcats::fct_rev(ZYG))) +
+  geom_bar(stat="identity", position="fill", width = 1) +
+  facet_grid(~GENE) +
+  theme(strip.background = element_rect(color="black", fill="white"), strip.text.x = element_text(angle=90), panel.spacing = unit(0.1, "lines")) +
+  theme(legend.title = element_blank(), legend.position = "top", legend.direction = "horizontal",legend.margin = margin(0,0,0,0), legend.box.margin = margin(-4,-4,-4,-4), panel.background =  element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(face = "bold") ) +
+  labs(y="Ratio", x="MHC Gene") +
+  scale_x_discrete(labels=c("C", "P")) +
+  scale_fill_manual(values= c("#1C1738", "#6047FF"), labels = c("Homozygous", "Heterozygous") , guide=guide_legend(reverse = TRUE) )
+
+```
+
+
+
+
+
+#Some tests
+```{r}
+
+
+data(iris)
+iris
+iris %>%
+  gather("Type", "Value",-Species) %>%
+  ggplot(aes(Species, Value, fill = Type)) +
+  geom_bar(position = "dodge", stat = "identity") +
+  theme_bw()
+
+```
+
+
+
+```{r}
+#complete fake testing for stacked bar chart
+test  <- data.frame(person=c("A", "B", "C", "D", "E"), 
+                    value1=c(100,150,120,80,150),     
+                    value2=c(25,30,45,30,30) , 
+                    value3=c(100,120,150,150,200)) 
+
+#library(reshape2) for melt
+
+melted <- melt(test, "person")
+
+melted$cat <- ''
+melted[melted$variable == 'value1',]$cat <- "first"
+melted[melted$variable != 'value1',]$cat <- "second"
+
+ggplot(melted, aes(x = cat, y = value, fill = variable)) + 
+  geom_bar(stat = 'identity', position = 'stack') + facet_grid(~ person)
+
+
+```
+
+
+

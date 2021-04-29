@@ -29,6 +29,8 @@ library("EnhancedVolcano")
 library("anRichment")
 library(tibble)
 library(dplyr)
+library(RColorBrewer)
+library(gplots)
 
 #BiocManager::install("EnhancedVolcano")
 ```
@@ -98,7 +100,7 @@ nrow(countsraw)
 toadd<-read.table("merged_gene_count.csv",header=T,sep=";")
 
 toadd<- toadd[,1:7]
-library(data.table)
+#library(data.table)
 test<-merge(counts, toadd, by.x="Geneid", by.y="GeneId")
 
 #Get the annotation of the transcripts from the counts file
@@ -116,7 +118,7 @@ rownames(countsraw)<-counts$Geneid
 ## CQN normalization
 ```{r}
 ### cqn normalization 
-#geneinfo<-data.frame(read.csv("gene_info_gc_length_clean.tsv",header=T,sep="\t"))
+geneinfo<-data.frame(read.csv("gene_info_gc_length_clean.tsv",header=T,sep="\t"))
 
 geneinfo<- read.table("Ensembl_hg38.Gene_features.GC_Content.txt",sep="\t", header=TRUE, stringsAsFactors=FALSE)
 
@@ -246,7 +248,8 @@ row.names(RPKM.cqn_prot)<-RPKM.cqn_prot$GeneId
 groups <- factor(sampleinfo$groups, levels = c("Control","TDP"))
 sex<-factor(sampleinfo$Sex, levels = c("M","F"))
 plate<-factor(sampleinfo$plate, levels = c("Plate1", "Plate2"))
-
+sampleadj<-sampleinfo[!(sampleinfo$SequencingID=="NA06-301" ), ]
+groups<-sampleadj$groups
 
 
 # Function to calculate fold change for variable A (a1) and B (b1)
@@ -260,50 +263,82 @@ foldChange <- function(a1, b1){
   }
 }
 
+foldChange <- function(a2, b2){
+  if(a2 > b2){
+    2^(a2 - b2)
+  }
+  else{
+    -(2^(b2 - a2))
+  }
+}
 
 ###no model adjustment
-pValues <- c()
-rValues <- c()
+ENO2<-as.data.frame(t(RPKM.cqn_prot[grep("ENSG00000111674",RPKM.cqn_prot$Geneid), 9:ncol(RPKM.cqn_prot)]))
+names(ENO2)[1]<-"ENSG00000111674"
+ENO2<-as.matrix(ENO2)
+CD68<-as.data.frame(t(RPKM.cqn_prot[grep("ENSG00000129226",RPKM.cqn_prot$Geneid),9:ncol(RPKM.cqn_prot)]))
+names(CD68)[1]<-"ENSG00000129226"
+CD68<-as.matrix(CD68)
+CD34<-as.data.frame(t(RPKM.cqn_prot[grep("ENSG00000174059",RPKM.cqn_prot$Geneid),9:ncol(RPKM.cqn_prot)]))
+names(CD34)[1]<-"ENSG00000174059"
+CD34<-as.matrix(CD34)
+GFAP<-as.data.frame(t(RPKM.cqn_prot[grep("ENSG00000131095",RPKM.cqn_prot$Geneid),9:ncol(RPKM.cqn_prot)]))
+names(GFAP)[1]<-"ENSG00000131095"
+GFAP<-as.matrix(GFAP)
+OLIG2<-as.data.frame(t(RPKM.cqn_prot[grep("ENSG00000205927",RPKM.cqn_prot$Geneid),9:ncol(RPKM.cqn_prot)]))
+names(OLIG2)[1]<-"ENSG00000205927"
+OLIG2<-as.matrix(OLIG2)
 
-for(i in 1:nrow(RPKM.cqn_prot)){
+pValues2 <- c()
+rValues2 <- c()
+
+#what it originally was
+#for(i in 1:nrow(RPKM.cqn_prot)){
+#expr<-t(RPKM.cqn_prot[i,9:ncol(RPKM.cqn_prot)])
+#f1<-lm(expr~sampleadj$RINFCX+sampleadj$Sex+sampleadj$Age+sampleadj$plate+groups, na.action=na.exclude)
+
+#f1nogroup<-lm(expr~sampleadj$RINFCX+sampleadj$Sex+sampleadj$Age+sampleadj$plate, na.action=na.exclude)
+
+for(i in 1:10){
 expr<-t(RPKM.cqn_prot[i,9:ncol(RPKM.cqn_prot)])
-f1<-lm(expr~sampleinfo$RINFCX+sampleinfo$Sex+sampleinfo$Age+sampleinfo$plate+groups, na.action=na.exclude)
+f2<-lm(expr~ENO2 + OLIG2 + CD68 + GFAP + CD34+sampleadj$RINFCX+sampleadj$Sex+sampleadj$Age+sampleadj$plate+groups, na.action=na.exclude)
 
-f1nogroup<-lm(expr~sampleinfo$RINFCX+sampleinfo$Sex+sampleinfo$Age+sampleinfo$plate, na.action=na.exclude)
+f2nogroup<-lm(expr~ENO2 + OLIG2 + CD68 + GFAP + CD34+sampleadj$RINFCX+sampleadj$Sex+sampleadj$Age+sampleadj$plate, na.action=na.exclude)
 
-a1<-anova(f1)  
+
+a2<-anova(f2)  
 ## Extract p-values for variables
-  pValues$GeneId[i] <- RPKM.cqn_prot[i,"Geneid"]
-  pValues$symbol[i]<-RPKM.cqn_prot[i,"GeneName"]
-  pValues$PValueGroup[i] <- a1$"Pr(>F)"[5]
-  pValues$PValueRINFCX[i] <- a1$"Pr(>F)"[1]
-  pValues$PValueSex[i] <- a1$"Pr(>F)"[2]
-  pValues$PValueAge[i] <- a1$"Pr(>F)"[3]
-  pValues$PValuePlate[i] <- a1$"Pr(>F)"[4]
+  pValues2$GeneId[i] <- RPKM.cqn_prot[i,"Geneid"]
+  pValues2$symbol[i]<-RPKM.cqn_prot[i,"GeneName"]
+  pValues2$PValueGroup[i] <- a2$"Pr(>F)"[5]
+  pValues2$PValueRINFCX[i] <- a2$"Pr(>F)"[6]
+  pValues2$PValueSex[i] <- a2$"Pr(>F)"[7]
+  pValues2$PValueAge[i] <- a2$"Pr(>F)"[8]
+  pValues2$PValuePlate[i] <- a2$"Pr(>F)"[9]
   
 ## Extract emmeans
 ### Make reference grid first
 
-  ref1 <- ref_grid(f1) 
+  ref2 <- ref_grid(f2) 
   
-  ls1 <- summary(emmeans(ref1, "groups"))
-  pValues$EMMeanControl[i] <- ls1$emmean[1]
-  pValues$EMMeanTDP[i] <- ls1$emmean[2]
+  ls2 <- summary(emmeans(ref2, "groups"))
+  pValues2$EMMeanControl[i] <- ls2$emmean[1]
+  pValues2$EMMeanTDP[i] <- ls2$emmean[2]
   
 ## Extract p-values for group variable and add fold change
 ### A tukey method is used for comparing a family of estimates
 
-  ls2 <- summary(emmeans(ref1, pairwise ~ groups))
+  ls2 <- summary(emmeans(ref2, pairwise ~ groups))
   
-   pValues$PValueTDP_vs_Control[i] <- ls2$contrasts$p.value[1]
-  pValues$FoldChangeTDP_vs_Control[i] <- foldChange(ls1$emmean[2], ls1$emmean[1])
+   pValues2$PValueTDP_vs_Control[i] <- ls2$contrasts$p.value[1]
+  pValues2$FoldChangeTDP_vs_Control[i] <- foldChange(ls2$emmean[2], ls2$emmean[1])
   
   
   ## Extract residuals
 
-  r1 <- residuals(f1nogroup)
-  rValues$i <- r1
-  names(rValues)[i] <- RPKM.cqn_prot[i, "Geneid"]
+  r2 <- residuals(f2nogroup)
+  rValues2$i <- r2
+  names(rValues2)[i] <- RPKM.cqn_prot[i, "Geneid"]
   
 #names(rValues)[i] <- row.names(RPKM.cqn[i,])
 
@@ -320,24 +355,24 @@ a1<-anova(f1)
 
 
 #Create the file with the pvalues and fold changes
-pValues$PValueTDP_vs_Control_fdr<-p.adjust(pValues$PValueTDP_vs_Control, method = "fdr", n = length(pValues$PValueTDP_vs_Control))
+pValues2$PValueTDP_vs_Control_fdr<-p.adjust(pValues2$PValueTDP_vs_Control, method = "fdr", n = length(pValues2$PValueTDP_vs_Control))
 
-pValues$PValueTDP_vs_Control_bon<-p.adjust(pValues$PValueTDP_vs_Control, method = "bonferroni", n = length(pValues$PValueTDP_vs_Control))
+pValues2$PValueTDP_vs_Control_bon<-p.adjust(pValues2$PValueTDP_vs_Control, method = "bonferroni", n = length(pValues2$PValueTDP_vs_Control))
 
-f1_output<-data.frame(pValues)
+f2_output<-data.frame(pValues2)
 
-f1_output<-f1_output[,c("GeneId","symbol","PValueGroup", "PValueRINFCX", "PValueSex", "PValueAge","PValuePlate","EMMeanTDP","EMMeanControl","FoldChangeTDP_vs_Control","PValueTDP_vs_Control","PValueTDP_vs_Control_fdr","PValueTDP_vs_Control_bon")]
+f2_output<-f2_output[,c("GeneId","symbol","PValueGroup", "PValueRINFCX", "PValueSex", "PValueAge","PValuePlate","EMMeanTDP","EMMeanControl","FoldChangeTDP_vs_Control","PValueTDP_vs_Control","PValueTDP_vs_Control_fdr","PValueTDP_vs_Control_bon")]
 
-write.table(f1_output,"FCX_Table_FC_pval.tsv",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = TRUE,col.names=NA)
+#write.table(f1_output,"FCX_Table_FC_pval.tsv",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = TRUE,col.names=NA)
 
 
-residf1_output<-data.frame(rValues)
-residf1_table<-transpose(residf1_output)
-row.names(residf1_table)<-names(residf1_output)
-names(residf1_table)<-row.names(residf1_output)
+residf2_output<-data.frame(rValues2)
+residf2_table<-transpose(residf2_output)
+row.names(residf2_table)<-names(residf2_output)
+names(residf2_table)<-row.names(residf2_output)
 
-residf1_table$symbol = mapIds(org.Hs.eg.db,keys=as.vector(row.names(residf1_table)), column="SYMBOL",keytype="ENSEMBL",multiVals="first")
-write.table(residf1_table,"FCX_Table_residuals.tsv",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = TRUE,col.names=NA)
+residf2_table$symbol = mapIds(org.Hs.eg.db,keys=as.vector(row.names(residf2_table)), column="SYMBOL",keytype="ENSEMBL",multiVals="first")
+#write.table(residf1_table,"FCX_Table_residuals.tsv",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = TRUE,col.names=NA)
 
 
 ```
@@ -385,9 +420,87 @@ HLA_list <- Gene_names[ c(grep("HLA-", Gene_names$symbol)), ]
 HLA_names <- data.frame(matrix(unlist(HLA_list), nrow=length(HLA_list), byrow=TRUE))
 head(HLA_names)
 
+test<-Expression_data
+test <- test [grepl (c("HLA-"), test$symbol) , ]
+test<-test[, c(2,3,5,7)]
+#write.table(test,"HLAexpressionDATA",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = TRUE,col.names=NA)
+
 
 ```
 
+###Extract all expressed genes found within the MHC region
+```{r}
+
+test<-Expression_data
+
+marta <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
+genesa <- test$GeneSymbol
+G_lista <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","chromosome_name", "start_position", "end_position"),values=genesa,mart= marta)
+test<-merge(test,G_lista,by.x="GeneSymbol",by.y="ensembl_gene_id")
+test<-test[,c(1,2,9:11,3:7)]
+
+#extract only chromosome 6 and then only the MHC region (chr6:28,510,120-33,480,577)
+test<-subset(test, test$chromosome_name==6 )
+test<-test %>% filter(between(start_position, 28510120, 33480577))
+testhlasubset<-test [grep(c("HLA-|MIC"),test$symbol ) ,]
+
+#write.table(testhlasubset,"HLAsubsetEXP",quote = FALSE, sep = "\t",na = "NA", dec = ".", row.names = TRUE,col.names=NA)
+
+mid=mean(testhlasubset$Log2FC )
+
+ggplot(testhlasubset, aes (symbol, Log2FC)) +
+  theme_light() +
+  #theme(legend.position="None") +
+  theme(axis.text.x = element_text(face = "bold", size = 6, angle = 45, hjust = 1)) +
+  geom_hline(yintercept = 0, size=0.5) +
+  scale_color_gradient(low="steelblue2", high="red1", guide = guide_colourbar(barwidth=0.5, barheight=10)) +
+  geom_point(aes(colour=Log2FC)) +
+  labs(title="Expression levels RNAseq dataset", subtitle="Log2 fold change of gene expression", y="Log2FC", x="Gene", caption="Differential expression levels")
+
+
+#To color the significantly differentially expressed genes
+testhlasubset <- testhlasubset %>% mutate(sig=case_when(Pvalue_fdr <0.05 ~ "significant",
+                                                 Pvalue_fdr>=0.05 ~ "Not significant"))
+#Now make it better
+ggplot(testhlasubset, aes (symbol, Log2FC)) +
+  theme_light() +
+  theme(axis.text.x = element_text(face = "bold", size = 6, angle = 45, hjust = 1)) +
+  geom_hline(yintercept = 0, size=0.5) +
+  geom_point(size=3.0, aes(color=sig)) +
+  scale_color_manual(values = c("#1A1A1A", "#2b8cbe"), name= "P-value", labels = c("Not significant","Significant (p<0.05)")) +
+  labs(title="Expression levels RNAseq dataset", subtitle="Log2 fold change of gene expression", y="Log2FC", x="Gene", caption="Differential expression levels")
+
+
+hlaplot<-ggplot(testhlasubset, aes (symbol, Log2FC)) +
+  theme_light() +
+  theme(axis.text.x = element_text(face = "bold", size = 6, angle = 45, hjust = 1)) +
+  geom_hline(yintercept = 0, size=0.5) +
+  geom_point(aes(size=Pvalue_fdr, color=sig)) +
+  scale_color_manual(values = c("#1A1A1A", "#2b8cbe"), name= "P-value", labels = c("Not significant","Significant (p<0.05)")) +
+  scale_size_continuous(range = c(4.2,1.5), name=NULL) +
+  guides(color = guide_legend(order=1),
+                 size = guide_legend(order = 2)) +
+  labs(title="Differential expression HLA genes", y="Log2FC", x="Gene", caption="Differential expression levels")
+
+#hlaplot2<-
+  
+ggplot(testhlasubset, aes (x=symbol, y=Log2FC, fill=sig)) +
+  theme_light() +
+  theme(axis.line = element_line(colour = "black"), panel.border = element_blank()) +
+  theme(axis.text.x = element_text(face = "bold", size = 7, angle = 45, hjust = 1)) +
+  theme(legend.background = element_rect(colour = "black"), plot.title = element_text(hjust = 0.5)) +
+  geom_hline(yintercept = 0, size=0.5) +
+  geom_bar(stat="identity", width = 0.6) +
+  scale_fill_manual(values = c("#1A1A1A", "#2b8cbe"), name= "P-value", labels = c("Not significant","Significant (p<0.05)")) +
+  labs(title="Differential expression HLA genes", y="Log2FC", x="Gene")
+
+hlaplot
+hlaplot2
+
+#cleanup
+rm(genesa, marta, G_lista, test2)
+
+```
 
 
 ```{r}
@@ -466,6 +579,7 @@ geom_label_repel(
 
 
 ```{r}
+#think this one is best
  EnhancedVolcano(Expression_data,
     lab = as.character(Expression_data$symbol),
     x = 'Log2FC',
@@ -476,27 +590,27 @@ geom_label_repel(
     axisLabSize = 10.0,
     title = 'Differential Gene expression analysis',
     titleLabSize = 13.0,
-    subtitle = 'FTLD-TDP vs Controls',
+    subtitle = 'FTLD-TDP vs Controls, adjusted p-values (fdr)',
     subtitleLabSize = 10.0,
-    caption = bquote('Adjusted p-values (fdr) were used'),
     captionLabSize = 9.0,
     pCutoff = 0.05,
     FCcutoff = 1.0,
     pointSize = 0.1,
-    labSize = 2.0,
+    labSize = 3.5,
     labCol = "black",
     #drawConnectors = TRUE,
     #widthConnectors = 0.5,
-    col=c("grey20", "royalblue", "forestgreen", "red2" ),
+    col=c("#9999CC", "#66FF33", "#99CCFF", "#CC33CC" ),
     colAlpha = 0.75,
-    legendLabels=c('No significance',expression(Log[2]~FC), expression(italic (p-value)),  expression(italic(p-value)~and~Log[2]~FC)),
+    legendLabels=c('Not significant',expression(Log[2]~FC), expression(italic (p-value)),  expression(italic(p)~and~Log[2]~FC)),
     legendPosition = 'right',
-    legendLabSize = 12,
-    legendIconSize = 3.0,
+    legendLabSize = 10,
+    legendIconSize = 2.0,
     gridlines.major = TRUE,
     gridlines.minor = TRUE,
     border = "full",
     borderWidth = 0.5)
+
 ```
 
 ```{r}
@@ -567,4 +681,132 @@ geom_label_repel(
     border = "full",
     borderWidth = 0.5)
 ```
+
+
+###Heatmap of gene expression levels
+```{r}
+test <- residf1_table
+test <- as.data.frame(test) %>% rownames_to_column( "ENS")
+
+marth <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
+genesh <- test$ENS
+G_listh <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","hgnc_symbol"),values=genesh,mart= marth)
+test<-merge(test,G_listh,by.x="ENS",by.y="ensembl_gene_id")
+test<-test[,c(91,2:90)]
+rnames <- test[,1]
+test_mat<- data.matrix(test[,c(2:ncol(test))])
+rownames(test_mat) <-rnames
+
+rm(rnames,genesh, marth, G_listh)
+
+#First try: Built-in R heatmap() function from stats package
+heatmap(test_mat, scale = 'none')
+memory.limit()
+
+
+zumeznj<- scale(mtcars)
+heatmap(zumeznj, scale = "none" )
+rm(zumeznj)
+
+
+
+library(ComplexHeatmap)
+Heatmap(test_mat)
+trial<-test_mat[1:50,1:20]
+Heatmap(trial)
+
+
+```
+
+###Another take on the heatmap
+```{r}
+Expr_data <- residf1_table[ , !names(residf1_table) %in% "symbol"]
+var_genes <- apply(Expr_data, 1, var)
+#Get top 500 most variable genes
+select_var <- names(sort(var_genes, decreasing=TRUE))[1:500]
+#Subset logcounts matrix
+highly_variable_lcpm <- as.matrix(Expr_data[select_var,])
+testcol<-colorRampPalette(brewer.pal(10, "RdYlBu"))(256)
+ 
+# Plot the heatmap
+Colv=FALSE
+
+col.cell3 <-as.character(c("Control"="#E78AC3","FTLD-TDP-A" ="#66C2A5","FTLD-TDP-C"="#A6D854","FTLD-TDP-B"="#8DA0CB" )[sampleinfo$GROUP])
+
+png("Heatmap_DSEQTemp.png", width = 12, height = 8, units = 'in',res=300)
+heatmap.2(highly_variable_lcpm,
+  Colv=TRUE, 
+  col=testcol,
+  trace="none", main="Top 500 most variable genes",
+  ColSideColors= col.cell3,
+  scale="row",key = TRUE, key.title = NA, key.par = list(mar=c(8.5,4,4,4), mgp=c(1.5, 0.5, 0)),
+  labRow=FALSE, labCol = FALSE, 
+  distfun = function(x) as.dist(1-cor(t(x))),
+  hclustfun = function(x) hclust(x, method="average"), dendrogram="column", reorderfun=function(d, w) reorder(d, w, agglo.FUN = mean))
+
+legend("left",      
+    legend = unique(sampleinfo$GROUP) ,
+    col = col.cell3, 
+    lty= 1,             
+    lwd = 5,           
+    cex=0.95
+    )
+dev.off()
+
+
+```
+
+###First attempt at GO analysis
+```{r}
+GOcollection <- buildGOcollection(organism="human")
+
+#Downregulated genes
+#Add category to the Expressiondata file
+
+Expression_data2 <- Expression_data %>% mutate(Significant = ifelse(Expression_data$Log2FC < -1 & Expression_data$Pvalue_fdr < 0.05, "Significant", "NoSignificant"))
+Category = Expression_data2$Significant; 
+table(Category) 
+#List of genes 
+symbol.0 = Expression_data$symbol
+# Some gene symbols have the form "XYZ /// ABC". Keep only the first symbol of all such multi-symbols. 
+split = strsplit(symbol.0, split = " /// ", fixed = TRUE); symbol = sapply(split, function(x) x[1]); 
+# Convert symbols to Entrez IDs 
+entrez = convert2entrez(organism = "human", symbol = symbol); 
+#Evaluate the enrichment 
+GOenrichment = enrichmentAnalysis( 
+classLabels = Category, 
+identifiers = entrez, 
+refCollection = GOcollection, 
+useBackground = "given", 
+threshold = 0.05, 
+getBonferroniCorrection = TRUE, 
+thresholdType = "FDR", 
+getOverlapEntrez = TRUE, 
+getOverlapSymbols = TRUE) 
+# column names 
+names(GOenrichment) 
+table.display = GOenrichment$enrichmentTable 
+table.display$overlapGenes = shortenStrings(table.display$overlapGenes, maxLength = 70, split = "|") 
+write.csv(GOenrichment$enrichmentTable, file ="DGE_GOenrichment-enrichmentTable_down.csv", row.names = FALSE) 
+Results_GO<-GOenrichment$enrichmentTable 
+print(paste0('There are ', nrow(Results_GO[Results_GO$class == "Significant" & Results_GO$FDR<0.05,]), ' significant term(s) in this analysis'))
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

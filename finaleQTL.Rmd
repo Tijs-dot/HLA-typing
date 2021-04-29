@@ -1,0 +1,1556 @@
+---
+title: "Final eQTL"
+output: html_notebook
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir = 'C:/Users/tijs/Documents/RademakersLab/R')
+
+```
+
+```{r}
+setwd("C:/Users/tijs/Documents/RademakersLab/R")
+
+#Loading libraries
+library(tidyverse)
+library(stringi)
+library(data.table)
+library(MatrixEQTL)
+ 
+```
+
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR;
+
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.A.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.A.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.A.cov.csv", sep="");
+output_file_name = tempfile();
+
+pvOutputThreshold = 0.05
+
+#define covariance matrix for the error term. Rarely used.
+errorCovariance = numeric()
+
+#loading the files with genotype
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+#Doing this again for gene expression and covariates
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.B.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.B.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.B.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.C.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.C.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.C.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+
+
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DMA.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DMA.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DMA.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+
+#DMB
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DMB.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DMB.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DMB.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#DOA
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DOA.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DOA.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DOA.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#DOB
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DOB.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DOB.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DOB.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#DPA1
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DPA1.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DPA1.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DPA1.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#DPB1
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DPB1.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DPB1.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DPB1.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#DPB2
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DPB2.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DPB2.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DPB2.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#DQA1
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DQA1.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DQA1.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DQA1.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#DQB1
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DQB1.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DQB1.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DQB1.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#DRA
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DRA.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DRA.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DRA.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#DRB1
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DRB1.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DRB1.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.DRB1.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#E
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.E.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.E.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.E.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#F
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.F.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.F.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.F.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#G
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.G.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.G.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.G.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+
+#H
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.H.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.H.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.H.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#K
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.K.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.K.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.K.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#L
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.L.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.L.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.L.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+#V
+###Load and prepare data
+```{r}
+base.dir = find.package("MatrixEQTL")
+useModel = modelLINEAR; 
+SNP_file_name = paste(base.dir, "/data/Split/RERO_eQTL.V.eqtl.csv", sep="")
+expression_file_name = paste(base.dir, "/data/Split/RERO_eQTL.V.fcx.csv", sep="")
+covariates_file_name = paste(base.dir, "/data/Split/RERO_eQTL.V.cov.csv", sep="");
+output_file_name = tempfile();
+pvOutputThreshold = 0.05
+errorCovariance = numeric()
+
+snps = SlicedData$new()
+snps$fileDelimiter = "\t"
+snps$fileOmitCharacters = "NA"
+snps$fileSkipRows = 1
+snps$fileSkipColumns = 1
+snps$fileSliceSize = 2000
+snps$LoadFile( SNP_file_name )
+
+gene = SlicedData$new()
+gene$fileDelimiter = "\t"
+gene$fileOmitCharacters = "NA"
+gene$fileSkipRows = 1
+gene$fileSkipColumns = 1
+gene$fileSliceSize = 2000
+gene$LoadFile( expression_file_name )
+
+cvrt = SlicedData$new()
+cvrt$fileDelimiter = "\t"
+cvrt$fileOmitCharacters = "NA"
+cvrt$fileSkipRows = 1
+cvrt$fileSkipColumns = 1
+cvrt$fileSliceSize = 2000
+cvrt$LoadFile( covariates_file_name )
+
+```
+###Plotting results
+```{r}
+meh = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+meq = Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = output_file_name,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel,
+    errorCovariance = errorCovariance,
+    verbose = TRUE,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+
+#Histogram, QQplot
+plot(meh, col="grey")
+plot(meq, pch = 16, cex = 0.7)
+print(output_file_name)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
